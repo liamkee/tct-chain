@@ -21,30 +21,36 @@
 
 ## 1. 核心原则
 
-- 前端严禁直接调用 Torn API。
-- 前端应通过单一聚合接口（Dashboard）获取战术数据。
-- 所有 Torn API 调用必须经过中心化速率限制层。
-- D1 为成员、状态、审计和历史的唯一事实来源。
-- KV 仅用于简单开关和非关键缓存。
-- Durable Objects 用于强一致性的实时协调（如报警去重）。
-- API Key 必须加密存储，并在绑定时立即验效。
+- 前端严禁直接调用 Torn API
+- 前端应通过单一聚合接口（Dashboard）获取战术数据
+- 所有 Torn API 调用必须经过中心化速率限制层
+- D1 为成员、状态、审计和历史的唯一事实来源
+- KV 仅用于简单开关和非关键缓存
+- Durable Objects 用于强一致性的实时协调
+- API Key 必须加密存储，并在绑定时立即验效
 
 ---
 
 ## 2. 数据模型 (D1)
 
 ### 核心表结构
-- **members**: 成员身份、Discord 绑定及 API Key 加密状态。
-- **member_status_snapshots**: 成员状态快照（能量、冷、状态等）。
-- **chain_snapshots**: 帮派连锁状态历史。
-- **audit_logs**: 敏感操作审计。
+- **資料庫建置 (D1)**：
+    - 建立 `Members`
+        - `Torn ID`
+        - `Name`
+        - `API Key`
+        - `Discord`
+        - `is_donator`
 
 ### KV 存储
 - `SYSTEM_MASTER_SWITCH`: 全局采撷总闸。
-- `WAR_MODE`: 战时模式开关。
 
 ### Durable Object
-- `ChainCoordinatorDO`: 掌管实时连锁逻辑、报警去重、里程碑通报。
+- `Energy`
+- `Status`
+- `booster_cooldow`
+- `drug_cooldown`
+- `chain_status`
 
 ---
 
@@ -59,30 +65,37 @@
 ---
 
 ## 4. 采集引擎逻辑
-
-### 定时任务 (Cron)
-- **每分钟**: 采集帮派基础及连锁状态。
-- **战时模式**: 增加成员能量/冷却采集频率。
-- **每日**: 刷新 Donator 状态。
+`Members`
+- `Torn ID` (一次)
+- `Name` (一次)
+- `API Key` (一次)
+- `Discord` (一次)
+- `Energy` (1分钟)
+- `Status` (1分钟)
+- `is_donator` (30分钟;如果有值就停止)
+- `booster_cooldow` (1分钟;如果超过24小时的值就停止)
+- `drug_cooldown` (1分钟;如果超过24小时的值就停止)
+- `chain_status` 每10秒User Trigger
 
 ### 队列 (Queue)
-- 负责扇出 (Fan-out) 请求，确保不触发 Torn API 速率限制（IP 限制）。
+- 负责扇出 (Fan-out) 请求，确保不触发 Torn API 速率限制（IP 限制）
 
 ---
 
 ## 5. 战术面板与 UI
 
 ### 聚合接口 (`/api/dashboard`)
-一次性返回：
-- 系统状态与连锁进度。
-- 目标连锁差距与预计完赛时间。
-- 近 5 分钟击率 (Hits/Min)。
-- 成员实时战术数据（可用击数、FHC 预估）。
+WebSocket：
+- 前端僅透過 /api/dashboard 進行身分驗證與握手，隨後建立持久型 WebSocket 連線
+- 目标连锁差距与预计完赛时间
+- 成员实时战术数据（可用击数、FHC 预估）
 
 ### UI 要求
-- 紧凑的操作型布局。
-- 成员列表支持一键过滤“眠/院/旅”人员。
-- 连锁危机（剩余时间 < 2分）视觉显著提醒。
+- 紧凑的操作型布局
+- 有一个master 按钮控制整个系统的运行和停止
+- 显示全部成员列表
+- 成员列表支持一键过滤Status人员
+- 连锁危机（剩余时间 < 1分）视觉显著提醒
 
 ---
 

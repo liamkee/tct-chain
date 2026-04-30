@@ -1,0 +1,240 @@
+/user/basic
+{
+    "profile": {
+        "id": 2153760,
+        "name": "xhang98",
+        "level": 30,
+        "gender": "Male",
+        "status": {
+            "description": "Okay",
+            "details": null,
+            "state": "Okay",
+            "color": "green",
+            "until": null
+        }
+    }
+}
+
+/user/cooldowns
+{
+    "cooldowns": {
+        "drug": 4433,
+        "medical": 10302,
+        "booster": 85827
+    }
+}
+
+/user/bars
+{
+    "bars": {
+        "energy": {
+            "current": 1073741824,
+            "maximum": 1073741824
+        },
+        "nerve": {
+            "current": 1073741824,
+            "maximum": 1073741824
+        },
+        "happy": {
+            "current": 1073741824,
+            "maximum": 1073741824
+        },
+        "life": {
+            "current": 1073741824,
+            "maximum": 1073741824
+        },
+        "chain": {
+            "id": 1073741824,
+            "current": 1073741824,
+            "max": 1073741824,
+            "timeout": 1073741824,
+            "modifier": 0.1,
+            "cooldown": 1073741824,
+            "start": 1073741824,
+            "end": 1073741824
+        }
+    }
+}
+
+/user/battlestats
+{
+    "battlestats": {
+        "strength": {
+            "value": 9007199254740991,
+            "modifier": 1073741824,
+            "modifiers": [
+                {
+                    "effect": "string",
+                    "value": 1073741824,
+                    "type": "string"
+                }
+            ]
+        },
+        "defense": {
+            "value": 9007199254740991,
+            "modifier": 1073741824,
+            "modifiers": [
+                {
+                    "effect": "string",
+                    "value": 1073741824,
+                    "type": "string"
+                }
+            ]
+        },
+        "speed": {
+            "value": 9007199254740991,
+            "modifier": 1073741824,
+            "modifiers": [
+                {
+                    "effect": "string",
+                    "value": 1073741824,
+                    "type": "string"
+                }
+            ]
+        },
+        "dexterity": {
+            "value": 9007199254740991,
+            "modifier": 1073741824,
+            "modifiers": [
+                {
+                    "effect": "string",
+                    "value": 1073741824,
+                    "type": "string"
+                }
+            ]
+        },
+        "total": 9007199254740991
+    }
+}
+
+/user/profile
+{
+    "profile": {
+        "id": 1073741824,
+        "name": "string",
+        "level": 1073741824,
+        "rank": "Absolute beginner",
+        "title": "Alcoholic",
+        "donator_status": "Donator",
+        "age": 1073741824,
+        "signed_up": 1073741824,
+        "faction_id": 1073741824,
+        "honor_id": 1073741824,
+        "property": {
+            "id": 9007199254740991,
+            "name": "string"
+        },
+        "image": "string",
+        "gender": "Male",
+        "revivable": true,
+        "role": "Admin",
+        "status": {
+            "description": "string",
+            "details": "string",
+            "state": "Abroad",
+            "color": "string",
+            "until": 1073741824,
+            "plane_image_type": "private_jet"
+        },
+        "spouse": {
+            "id": 1073741824,
+            "name": "string",
+            "status": "Engaged",
+            "days_married": 1073741824
+        },
+        "awards": 1073741824,
+        "friends": 1073741824,
+        "enemies": 1073741824,
+        "forum_posts": 1073741824,
+        "karma": 1073741824,
+        "last_action": {
+            "status": "Online",
+            "timestamp": 1073741824,
+            "relative": "string"
+        },
+        "life": {
+            "current": 1073741824,
+            "maximum": 1073741824
+        }
+    }
+}
+
+/faction/chain
+{
+    "chain": {
+        "id": 1073741824,
+        "current": 1073741824,
+        "max": 1073741824,
+        "timeout": 1073741824,
+        "modifier": 0.1,
+        "cooldown": 1073741824,
+        "start": 1073741824,
+        "end": 1073741824
+    }
+}
+
+/user/refills
+{
+    "refills": {
+        "energy": true,
+        "nerve": true,
+        "token": true,
+        "special_count": 1073741824
+    }
+}
+
+/user/timestamp
+{
+    "timestamp": 1073741824
+}
+
+Chains History
+/faction/chains
+{
+    "chains": [
+        {
+            "id": 1073741824,
+            "chain": 1073741824,
+            "respect": 0.1,
+            "start": 1073741824,
+            "end": 1073741824
+        }
+    ],
+    "_metadata": {
+        "links": {
+            "next": "string",
+            "prev": "string"
+        }
+    }
+}
+
+/faction/members
+{
+    "members": [
+        {
+            "id": 1073741824,
+            "name": "string",
+            "position": "string",
+            "level": 1073741824,
+            "days_in_faction": 1073741824,
+            "is_revivable": true,
+            "is_on_wall": true,
+            "is_in_oc": true,
+            "has_early_discharge": true,
+            "last_action": {
+                "status": "Online",
+                "timestamp": 1073741824,
+                "relative": "string"
+            },
+            "status": {
+                "description": "string",
+                "details": "string",
+                "state": "Abroad",
+                "color": "string",
+                "until": 1073741824,
+                "plane_image_type": "private_jet"
+            },
+            "revive_setting": "Everyone"
+        }
+    ]
+}
