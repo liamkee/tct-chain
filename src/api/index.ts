@@ -1,16 +1,24 @@
 import { Hono } from 'hono'
 import { drizzle } from 'drizzle-orm/d1'
 import { members } from '../db/schema'
+import auth from './auth'
 
-type Env = {
+export type Env = {
   Bindings: {
     DB: D1Database;
     TCT_CACHE: KVNamespace;
     MEMBER_QUEUE: Queue;
+    DISCORD_CLIENT_ID: string;
+    DISCORD_CLIENT_SECRET: string;
+    JWT_SECRET: string;
+    ENCRYPTION_SECRET: string;
+    FACTION_ID: string;
   }
 }
 
 const api = new Hono<Env>()
+
+api.route('/auth', auth)
 
 api.get('/health', async (c) => {
   try {
@@ -24,6 +32,9 @@ api.get('/health', async (c) => {
 
     // 3. Test Queue binding
     const queueExists = !!c.env.MEMBER_QUEUE;
+    if (queueExists) {
+      await c.env.MEMBER_QUEUE.send({ test: 'Ping from health check!', time: Date.now() });
+    }
 
     return c.json({ 
       status: 'ok', 

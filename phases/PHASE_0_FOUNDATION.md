@@ -25,31 +25,31 @@
 
 ## 2. 鉴权与安全体系 (Auth & Security)
 
-- [ ] **Discord OAuth2 流程实现**:
-    - [ ] 在 Discord Developer Portal 创建应用并获取 Client ID/Secret。
-    - [ ] 实现 `/api/auth/login` 重定向逻辑。
-    - [ ] 实现 `/api/auth/callback`：接收 Code -> 换取 Token -> 获取用户信息。
-    - [ ] **成员白名单校验**：在登录时调用一次 Torn API，确认该 Discord 用户所属帮派 ID 是否匹配。
+- [x] **Discord OAuth2 流程实现**:
+    - [x] 在 Discord Developer Portal 创建应用并获取 Client ID/Secret。
+    - [x] 实现 `/api/auth/login` 重定向逻辑。
+    - [x] 实现 `/api/auth/callback`：接收 Code -> 换取 Token -> 获取用户信息。
+    - [x] **成员白名单校验**：在登录时调用一次 Torn API，确认该 Discord 用户所属帮派 ID 是否匹配。
     - ⚠️ **OAuth2 安全陷阱 (必须注意)**:
-        - [ ] **CSRF 防护 (state 参数)**：`/api/auth/login` 生成随机 `state` 字符串存入 Cookie/KV → 重定向 Discord 时附带 `state` → callback 收到后 **必须比对**，不匹配直接拒绝。不做此步 = 攻击者可伪造登录。
-        - [ ] **Code 换 Token 必须服务端执行**：`client_secret` 绝不能出现在前端代码或 URL 中。Hono 后端直接 `fetch('https://discord.com/api/oauth2/token', ...)` 完成交换。
-        - [ ] **Token 存储策略**：Discord Access Token 仅用于一次性获取用户信息后即刻丢弃，**不要持久化**。系统后续使用自签的 JWT 或加密 Cookie 维持会话。
-        - [ ] **边界情况处理**：
-            - 用户 Discord 账户存在但未绑定 Torn → 返回引导页提示绑定 API Key。
-            - 用户被踢出帮派 → 下次打开面板时校验失败，强制登出并清除 Cookie。
-            - Discord API 临时不可用 → 返回友好错误页面，而非 500 崩溃。
-- [ ] **API Key 验效与加密存储逻辑**:
-    - [ ] 方案设计：使用 Web Crypto API 的 AES-GCM 模式。
-    - [ ] 绑定验效：前端提交 Key -> 后端调用一次 Torn API 验证其真实性与权限。
-    - [ ] 落盘流程：验效通过后 -> 后端生成随机 IV -> 加密存入 D1 的 `Members` 表。
-    - [ ] 密钥管理：在 Cloudflare Secret 中配置 `ENCRYPTION_SECRET`。
+        - [x] **CSRF 防护 (state 参数)**：`/api/auth/login` 生成随机 `state` 字符串存入 Cookie/KV → 重定向 Discord 时附带 `state` → callback 收到后 **必须比对**，不匹配直接拒绝。不做此步 = 攻击者可伪造登录。
+        - [x] **Code 换 Token 必须服务端执行**：`client_secret` 绝不能出现在前端代码或 URL 中。Hono 后端直接 `fetch('https://discord.com/api/oauth2/token', ...)` 完成交换。
+        - [x] **Token 存储策略**：Discord Access Token 仅用于一次性获取用户信息后即刻丢弃，**不要持久化**。系统后续使用自签的 JWT 或加密 Cookie 维持会话。
+        - [x] **边界情况处理**：
+            - [x] 用户 Discord 账户存在但未绑定 Torn → 返回引导页提示绑定 API Key。
+            - [x] 用户被踢出帮派 → 下次打开面板时校验失败，强制登出并清除 Cookie。
+            - [x] Discord API 临时不可用 → 返回友好错误页面，而非 500 崩溃。
+- [x] **API Key 验效与加密存储逻辑**:
+    - [x] 方案设计：使用 Web Crypto API 的 AES-GCM 模式。
+    - [x] 绑定验效：前端提交 Key -> 后端调用一次 Torn API 验证其真实性与权限。
+    - [x] 落盘流程：验效通过后 -> 后端生成随机 IV -> 加密存入 D1 的 `Members` 表。
+    - [x] 密钥管理：在 Cloudflare Secret 中配置 `ENCRYPTION_SECRET`。
     - ⚠️ **AES-GCM 致命陷阱 (搞错一步 = 数据泄露或永久丢失)**:
-        - [ ] **IV 必须每次随机生成 12 字节**：`crypto.getRandomValues(new Uint8Array(12))`。**绝对禁止** IV 重用（相同 Key + 相同 IV = 密文可被破解）。
-        - [ ] **IV 不是秘密，必须与密文一起存储**：D1 存储格式建议 `base64(IV):base64(ciphertext+authTag)`，冒号分隔，读取时先 split 再分别解码。
-        - [ ] **ENCRYPTION_SECRET 导入方式**：不能直接将字符串当 key 用。必须先 `crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt', 'decrypt'])`。如果 Secret 是人类可读字符串，先用 `TextEncoder().encode()` 转为 Uint8Array，且长度必须恰好为 16（AES-128）或 32（AES-256）字节。
-        - [ ] **密钥丢失 = 全部 API Key 永久不可恢复**：Cloudflare Secret 一旦删除无法找回。建议部署者在安全的离线位置（如密码管理器）保留一份 ENCRYPTION_SECRET 备份。
-        - [ ] **AuthTag 验证失败 ≠ 密码错误**：AES-GCM 解密时如果 `ENCRYPTION_SECRET` 不匹配或数据被篡改，`crypto.subtle.decrypt()` 会直接 throw `OperationError`。必须 try/catch 并返回明确的 "密钥不匹配" 错误，而非让系统崩溃。
-- [ ] **会话管理**: 使用 JWT 或加密 Cookie 保持登录状态，设置合理的过期时间。
+        - [x] **IV 必须每次随机生成 12 字节**：`crypto.getRandomValues(new Uint8Array(12))`。**绝对禁止** IV 重用（相同 Key + 相同 IV = 密文可被破解）。
+        - [x] **IV 不是秘密，必须与密文一起存储**：D1 存储格式建议 `base64(IV):base64(ciphertext+authTag)`，冒号分隔，读取时先 split 再分别解码。
+        - [x] **ENCRYPTION_SECRET 导入方式**：不能直接将字符串当 key 用。必须先 `crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt', 'decrypt'])`。如果 Secret 是人类可读字符串，先用 `TextEncoder().encode()` 转为 Uint8Array，且长度必须恰好为 16（AES-128）或 32（AES-256）字节。
+        - [x] **密钥丢失 = 全部 API Key 永久不可恢复**：Cloudflare Secret 一旦删除无法找回。建议部署者在安全的离线位置（如密码管理器）保留一份 ENCRYPTION_SECRET 备份。
+        - [x] **AuthTag 验证失败 ≠ 密码错误**：AES-GCM 解密时如果 `ENCRYPTION_SECRET` 不匹配或数据被篡改，`crypto.subtle.decrypt()` 会直接 throw `OperationError`。必须 try/catch 并返回明确的 "密钥不匹配" 错误，而非让系统崩溃。
+- [x] **会话管理**: 使用 JWT 或加密 Cookie 保持登录状态，设置合理的过期时间。
     - ⚠️ **JWT 签名密钥**必须使用 Cloudflare Secret 中的独立密钥（不可复用 ENCRYPTION_SECRET），且设置合理的 `exp`（建议 24h）。
 
 ## 3. 全局控制中枢 (Control Plane)

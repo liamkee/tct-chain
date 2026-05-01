@@ -23,6 +23,11 @@ id = "cd04cc35dccb4aca92098677815d7128"
 queue = "tct-member-queue"
 binding = "MEMBER_QUEUE"
 
+[[queues.consumers]]
+queue = "tct-member-queue"
+max_batch_size = 10
+max_batch_timeout = 5
+
 [[durable_objects.bindings]]
 name = "CHAIN_MONITOR"
 class_name = "ChainMonitor"
@@ -30,3 +35,6 @@ class_name = "ChainMonitor"
 [[migrations]]
 tag = "v1"
 new_classes = ["ChainMonitor"]
+
+[vars]
+FACTION_ID = "12345" # TODO: 填写真实的帮派 ID

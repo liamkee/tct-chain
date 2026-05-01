@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { DurableObject } from 'cloudflare:workers'
 import api from './api'
 
 type Env = {
@@ -6,6 +7,7 @@ type Env = {
     ASSETS: Fetcher;
     TCT_CACHE: KVNamespace;
     DB: D1Database;
+    MEMBER_QUEUE: Queue;
   }
 }
 
@@ -22,10 +24,9 @@ app.get('*', async (c, next) => {
 })
 
 // Durable Object: ChainMonitor
-export class ChainMonitor {
-  state: DurableObjectState;
+export class ChainMonitor extends DurableObject {
   constructor(state: DurableObjectState, env: Env) {
-    this.state = state;
+    super(state, env);
   }
   
   async fetch(request: Request) {
@@ -33,4 +34,12 @@ export class ChainMonitor {
   }
 }
 
-export default app
+export default {
+  fetch: app.fetch,
+  async queue(batch: MessageBatch<any>, env: Env['Bindings']): Promise<void> {
+    console.log(`[Queue] 🚀 Received batch of ${batch.messages.length} messages.`);
+    for (const message of batch.messages) {
+      console.log(`[Queue] 📨 Processing payload:`, message.body);
+    }
+  }
+}
