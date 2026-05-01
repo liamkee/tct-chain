@@ -41,4 +41,6 @@ tag = "v1"
 new_classes = ["ChainMonitor"]
 
 [vars]
-FACTION_ID = "12345" # TODO: 填写真实的帮派 ID
+FACTION_ID = "12345"
+JWT_SECRET = "test-secret"
+ENCRYPTION_SECRET = "test-encryption-secret-32-chars-!!"

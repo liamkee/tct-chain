@@ -17,6 +17,7 @@ export type Env = {
     DISCORD_CLIENT_ID: string;
     DISCORD_CLIENT_SECRET: string;
     FACTION_ID: string;
+    ANALYTICS: AnalyticsEngineDataset;
   }
 }
 
@@ -35,19 +36,15 @@ app.get('*', async (c, next) => {
 // Durable Object: ChainMonitor
 export { ChainMonitor }
 
+import { producer } from './jobs/faction_poller'
+import { consumer } from './jobs/member_consumer'
+
 export default {
   fetch: app.fetch,
-  async queue(batch: MessageBatch<any>, env: Env['Bindings']): Promise<void> {
-    // Zero-Waste check for Queue
-    const switchState = await env.TCT_KV.get('SYSTEM_MASTER_SWITCH');
-    if (switchState === 'OFF') {
-      console.log('[Queue] 🛑 Master Switch is OFF. Dropping batch to save execution time.');
-      return;
-    }
-
-    console.log(`[Queue] 🚀 Received batch of ${batch.messages.length} messages.`);
-    for (const message of batch.messages) {
-      console.log(`[Queue] 📨 Processing payload:`, message.body);
-    }
+  async scheduled(event: any, env: Env['Bindings'], ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(producer(event, env));
+  },
+  async queue(batch: MessageBatch<any>, env: Env['Bindings'], ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(consumer(batch, env));
   }
 }
