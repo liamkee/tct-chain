@@ -2,11 +2,14 @@ import { Hono } from 'hono'
 import { drizzle } from 'drizzle-orm/d1'
 import { members } from '../db/schema'
 import auth from './auth'
+import admin from './admin'
 
 export type Env = {
   Bindings: {
     DB: D1Database;
     TCT_CACHE: KVNamespace;
+    TCT_KV: KVNamespace; // Master Switch KV
+    CHAIN_MONITOR: DurableObjectNamespace;
     MEMBER_QUEUE: Queue;
     DISCORD_CLIENT_ID: string;
     DISCORD_CLIENT_SECRET: string;
@@ -19,8 +22,23 @@ export type Env = {
 const api = new Hono<Env>()
 
 api.route('/auth', auth)
+api.route('/admin', admin)
 
-api.get('/health', async (c) => {
+// Global Master Switch Middleware (Edge Interception)
+export const checkMasterSwitch = async (c: any, next: any) => {
+  // Cloudflare KV requirement: cacheTtl must be at least 30s
+  const state = await c.env.TCT_KV.get('SYSTEM_MASTER_SWITCH', { cacheTtl: 30 });
+  
+  if (state === 'OFF') {
+    return c.json({ 
+      error: 'System is currently maintenance mode (Master Switch OFF)',
+      status: 'stopped'
+    }, 503);
+  }
+  await next();
+};
+
+api.get('/health', checkMasterSwitch, async (c) => {
   try {
     // 1. Test KV
     await c.env.TCT_CACHE.put('ping', 'pong');

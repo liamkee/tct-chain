@@ -1,4 +1,5 @@
-import { Hono, Context } from 'hono'
+import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { sign, verify } from 'hono/jwt'
 import { drizzle } from 'drizzle-orm/d1'

@@ -19,6 +19,10 @@ database_id = "771396e6-dd72-41cb-87da-64f5565c8cce"
 binding = "TCT_CACHE"
 id = "cd04cc35dccb4aca92098677815d7128"
 
+[[kv_namespaces]]
+binding = "TCT_KV"
+id = "cd04cc35dccb4aca92098677815d7128" # 建议生产环境使用独立的 KV ID
+
 [[queues.producers]]
 queue = "tct-member-queue"
 binding = "MEMBER_QUEUE"

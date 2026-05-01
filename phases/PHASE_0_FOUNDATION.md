@@ -54,38 +54,38 @@
 
 ## 3. 全局控制中枢 (Control Plane)
 
-- [ ] **Master Switch (总闸)**:
-    - [ ] 在 KV 中定义键名 `SYSTEM_MASTER_SWITCH`。KV **仅此一项**用途。
-    - [ ] 实现后台管理 API：`POST /api/admin/toggle`，需 `role = admin` 权限校验。
-    - [ ] **DO 点火机制**：当 Master Switch 被切为 `ON` 时，API handler 同步调用 `env.CHAIN_MONITOR.get(id).fetch('/start')` 唤醒 DO 并触发首次 `setAlarm()`。切为 `OFF` 时，DO Alarm handler 检测到 OFF 状态后停止注册下一轮 Alarm，自动休眠。
-    - [ ] 实现全局中间件：所有采集逻辑执行前必须先读取此 KV 状态，若为 `OFF` 则立即中止。
-- [ ] **权限配置 (Admin Role)**:
-    - [ ] Members 表 `role` 字段默认为 `member`，仅 Master Switch 操作需 `admin` 权限。
-    - [ ] **配置时机**：在帮派成员数据（通过 Phase 1 Faction API 或手动录入）写入 D1 后，由部署者手动在数据库中将指定成员的 `role` 设为 `admin`。
-    - [ ] 其他操作（全息作战板圈人、Chain Target 修改）所有已登录帮派成员均可执行。
-- [ ] **前端基础布局**:
-    - [ ] 搭建 React 顶层容器，集成颜色主题 (Dark Mode) 和基础 CSS。
-    - [ ] 实现一个常驻的“系统运行状态”指示灯组件。
+- [x] **Master Switch (总闸)**:
+    - [x] 在 KV 中定义键名 `SYSTEM_MASTER_SWITCH`。KV **仅此一项**用途。
+    - [x] 实现后台管理 API：`POST /api/admin/toggle`，需 `role = admin` 权限校验。
+    - [x] **DO 点火机制**：当 Master Switch 被切为 `ON` 时，API handler 同步调用 `env.CHAIN_MONITOR.get(id).fetch('/toggle')` 唤醒 DO 并触发首次 `setAlarm()`。切为 `OFF` 时，DO Alarm handler 检测到 OFF 状态后停止注册下一轮 Alarm，自动休眠。
+    - [x] 实现全局中间件：所有采集逻辑执行前必须先读取此 KV 状态，若为 `OFF` 则立即中止。
+- [x] **权限配置 (Admin Role)**:
+    - [x] Members 表 `role` 字段默认为 `member`，仅 Master Switch 操作需 `admin` 权限。
+    - [x] **配置时机**：在帮派成员数据（通过 Phase 1 Faction API 或手动录入）写入 D1 后，由部署者手动在数据库中将指定成员的 `role` 设为 `admin`。
+    - [x] 其他操作（全息作战板圈人、Chain Target 修改）所有已登录帮派成员均可执行。
+- [x] **前端基础布局**:
+    - [x] 搭建 React 顶层容器，集成颜色主题 (Dark Mode) 和基础 CSS。
+    - [x] 实现一个常驻的“系统运行状态”指示灯组件。
 
 ---
 
 ## 4. 验证与测试清单 (Verification & Testing)
 
 ### 🧪 基础设施审计 (Infrastructure Audit)
-- [ ] **数据库冒烟测试**: 执行一次 D1 写入与读取，确保 Drizzle Schema 与数据库完全同步。
-- [ ] **加解密一致性测试**: 
-    - [ ] 输入 API Key，加密存入 D1。
-    - [ ] 取出并解密，验证原始 Key 匹配度需达 100%。
-- [ ] **鉴权闭环测试**: 
-    - [ ] 点击 Discord 登录，验证系统能正确获取 `discord_id`。
-    - [ ] 验证非白名单/非帮派成员的拦截逻辑。
+- [x] **数据库冒烟测试**: 执行一次 D1 写入与读取，确保 Drizzle Schema 与数据库完全同步。
+- [x] **加解密一致性测试**: 
+    - [x] 输入 API Key，加密存入 D1。
+    - [x] 取出并解密，验证原始 Key 匹配度需达 100%。
+- [x] **鉴权闭环测试**: 
+    - [x] 点击 Discord 登录，验证系统能正确获取 `discord_id`。
+    - [x] 验证非白名单/非帮派成员的拦截逻辑。
 
 ### 📊 预期指标
 | 验证项 | 预期结果 | 状态 |
 | :--- | :--- | :--- |
-| `wrangler dev` | 全栈工程本地冷启动成功 | [ ] |
-| Security Roundtrip | AES-GCM 密文在数据库中不可读，解密后恢复原值 | [ ] |
-| Global Switch | KV `SYSTEM_MASTER_SWITCH` 设为 `OFF` 时，所有 API 返回 503 | [ ] |
+| `wrangler dev` | 全栈工程本地冷启动成功 | [x] |
+| Security Roundtrip | AES-GCM 密文在数据库中不可读，解密后恢复原值 | [x] |
+| Global Switch | KV `SYSTEM_MASTER_SWITCH` 设为 `OFF` 时，所有 API 返回 503 | [x] |
 
 ---
 
