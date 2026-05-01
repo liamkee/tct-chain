@@ -7,21 +7,21 @@
 
 ## 1. 基础设施脚手架 (Infrastructure Scaffolding)
 
-- [ ] **项目初始化**:
-    - [ ] 创建工程目录并初始化 `git`。
-    - [ ] 遵循单代码库、单 Worker 原则：前端使用 `Vite` + `React`，后端使用 `Hono`。
-    - [ ] 安装核心依赖：`hono`, `@hono/vite-dev-server` (本地开发热更新), `drizzle-orm`, `@tanstack/react-router`, `@tanstack/react-query`, `zustand`。部署通过 `wrangler deploy` 走 Workers Static Assets，非 Pages Functions。
-    - [ ] 搭建目录结构：`/src/api` (Hono 路由), `/src/db` (数据库), `/src/components` (UI), `/src/services` (业务逻辑)。
+- [x] **项目初始化**:
+    - [x] 创建工程目录并初始化 `git`。
+    - [x] 遵循单代码库、单 Worker 原则：前端使用 `Vite` + `React`，后端使用 `Hono`。
+    - [x] 安装核心依赖：`hono`, `@hono/vite-dev-server` (本地开发热更新), `drizzle-orm`, `@tanstack/react-router`, `@tanstack/react-query`, `zustand`。部署通过 `wrangler deploy` 走 Workers Static Assets，非 Pages Functions。
+    - [x] 搭建目录结构：`/src/api` (Hono 路由), `/src/db` (数据库), `/src/components` (UI), `/src/services` (业务逻辑)。
 - [ ] **Cloudflare 资源编排 (Wrangler CLI 纯命令行接管)**:
-    - [ ] **配置自定义域名**: 在 `wrangler.toml` 中配置 `routes = [{ pattern = "torn.nobaggage2rome.com", custom_domain = true }]`。
-    - [ ] **创建 D1 数据库**: 执行 `npx wrangler d1 create tct-db`，将输出的 `database_id` 填入 `wrangler.toml`。
-    - [ ] **创建 KV 命名空间**: 执行 `npx wrangler kv:namespace create TCT_CACHE`，提取 ID。
-    - [ ] **创建 Queue**: 执行 `npx wrangler queues create tct-member-queue`。
-    - [ ] **注入加密机密**: 拒绝网页端，直接在终端执行 `npx wrangler secret put ENCRYPTION_SECRET` 等命令注入敏感配置。
-    - [ ] 注册 Durable Object：定义名为 `ChainMonitor` 的类，用于承载强一致性的高频实时状态（Energy, Status, cooldowns, chain_status, energy_refill_used, **System_Micro_Logs**）。
-- [ ] **Drizzle ORM 配置**:
-    - [ ] 编写 `schema.ts`：定义 `Members`（包含 `Torn ID`, `Name`, `API Key`, `Discord`, `is_donator`, `role` 等）及其他辅助表结构。
-    - [ ] 配置 `drizzle.config.ts` 并运行首个 `generate` 与 `migrate` 命令。
+    - [x] **配置自定义域名**: 在 `wrangler.toml` 中配置 `routes = [{ pattern = "torn.nobaggage2rome.com", custom_domain = true }]`。
+    - [x] **创建 D1 数据库**: 执行 `npx wrangler d1 create tct-db`，将输出的 `database_id` 填入 `wrangler.toml`。
+    - [x] **创建 KV 命名空间**: 执行 `npx wrangler kv:namespace create TCT_CACHE`，提取 ID。
+    - [x] **创建 Queue**: 执行 `npx wrangler queues create tct-member-queue`。
+    - [x] **注入加密机密**: 拒绝网页端，直接在终端执行 `npx wrangler secret put ENCRYPTION_SECRET` 等命令注入敏感配置。
+    - [x] 注册 Durable Object：定义名为 `ChainMonitor` 的类，用于承载强一致性的高频实时状态（Energy, Status, cooldowns, chain_status, energy_refill_used, **System_Micro_Logs**）。
+- [x] **Drizzle ORM 配置**:
+    - [x] 编写 `schema.ts`：定义 `Members`（包含 `Torn ID`, `Name`, `API Key`, `Discord`, `is_donator`, `role` 等）及其他辅助表结构。
+    - [x] 配置 `drizzle.config.ts` 并运行首个 `generate` 与 `migrate` 命令。
 
 ## 2. 鉴权与安全体系 (Auth & Security)
 
