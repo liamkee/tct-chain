@@ -27,9 +27,10 @@ async function verifyTornKey(apiKey: string, factionId: string) {
 // Helper: Set Session Cookie
 async function setSessionCookie(c: Context, payload: any, secret: string) {
   const token = await sign(payload, secret, 'HS256')
+  const isSecure = new URL(c.req.url).protocol === 'https:'
   setCookie(c, 'tct_session', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'Lax',
     path: '/'
   })
@@ -40,7 +41,7 @@ auth.get('/login', async (c) => {
   const state = crypto.randomUUID()
   setCookie(c, 'oauth_state', state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: new URL(c.req.url).protocol === 'https:',
     sameSite: 'Lax',
     maxAge: 60 * 10, // 10 minutes
     path: '/'

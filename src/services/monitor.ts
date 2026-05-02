@@ -1,4 +1,4 @@
-import type { Env } from '../api/index'
+import type { Env } from '../index'
 import { TacticalCalculator } from './calculator'
 
 export class ChainMonitor implements DurableObject {
@@ -415,7 +415,6 @@ export class ChainMonitor implements DurableObject {
       await this.state.storage.put('tactical_aggregate', aggregate);
 
       if (hasChanges) {
-        await this.state.storage.put(storageUpdates);
         await this.state.storage.put('member_status_cache', Object.fromEntries(this.memberStatusCache));
       }
 
@@ -434,17 +433,7 @@ export class ChainMonitor implements DurableObject {
       await this.state.storage.put('chain_current', this.lastChainCurrent);
       await this.state.storage.put('chain_timeout', this.lastChainTimeout);
       
-      const chainTimeout = chainData?.timeout ?? (await this.state.storage.get<number>('chain_timeout')) ?? 0;
 
-      if (switchState === 'OFF') {
-        if (chainTimeout === 0) {
-          await this.state.storage.deleteAlarm();
-          return;
-        }
-        if (chainTimeout === 0) {
-          await this.state.storage.setAlarm(Date.now() + 60000);
-        } 
-      }
 
       this.broadcastToWebSockets({ type: 'HEARTBEAT', lastUpdatedAt: this.lastUpdatedAt, microLogs: this.microLogs });
 

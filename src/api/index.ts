@@ -7,21 +7,9 @@ import auth from './auth'
 import admin from './admin'
 import dashboard from './dashboard'
 
-export type Env = {
-  Bindings: {
-    DB: D1Database;
-    TCT_CACHE: KVNamespace;
-    TCT_KV: KVNamespace; // Master Switch KV
-    CHAIN_MONITOR: DurableObjectNamespace;
-    MEMBER_QUEUE: Queue;
-    DISCORD_CLIENT_ID: string;
-    DISCORD_CLIENT_SECRET: string;
-    JWT_SECRET: string;
-    ENCRYPTION_SECRET: string;
-    FACTION_ID: string;
-    COMMANDER_API_KEY: string;
-  }
-}
+// Single source of truth for Env type — defined in src/index.ts
+export type { Env } from '../index'
+import type { Env } from '../index'
 
 const api = new Hono<Env>()
 

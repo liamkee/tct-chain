@@ -41,10 +41,9 @@ export function useTctSocket() {
             setSquad(payload.members);
             break;
           case 'LOG_UPDATE':
-            // 如果是数组则覆盖，如果是单条则添加
+            // Atomic replace to avoid N re-renders from forEach
             if (payload.microLogs) {
-               // 这里简化处理，直接用最后一条或全量
-               payload.microLogs.forEach((l: any) => addLog(l));
+               useDashboardStore.setState({ microLogs: payload.microLogs });
             }
             break;
           case 'HEARTBEAT':

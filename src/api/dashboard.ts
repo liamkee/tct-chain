@@ -5,7 +5,25 @@ import type { Env } from '../index'
 
 const dashboard = new Hono<Env>()
 
-// 获取全量快照 (Initial Snapshot)
+// Auth middleware - all dashboard routes require authenticated session
+dashboard.use('*', async (c, next) => {
+  const token = getCookie(c, 'tct_session')
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
+
+  try {
+    const payload = await verify(token, c.env.JWT_SECRET, 'HS256') as any
+    // Destructive operations require admin role
+    const path = new URL(c.req.url).pathname
+    if ((path.endsWith('/start') || path.endsWith('/stop') || path.endsWith('/clear')) && payload.role !== 'admin') {
+      return c.json({ error: 'Forbidden: Admin access required' }, 403)
+    }
+    await next()
+  } catch (e) {
+    return c.json({ error: 'Invalid Session' }, 401)
+  }
+})
+
+// Initial snapshot (any authenticated user)
 dashboard.get('/snapshot', async (c) => {
   const id = c.env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR');
   const stub = c.env.CHAIN_MONITOR.get(id);
@@ -22,7 +40,7 @@ dashboard.get('/snapshot', async (c) => {
   });
 });
 
-// 清空存储 (用于调试和切换帮派)
+// Clear storage (admin only, enforced by middleware)
 dashboard.get('/clear', async (c) => {
   const id = c.env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR');
   const stub = c.env.CHAIN_MONITOR.get(id);
@@ -30,6 +48,7 @@ dashboard.get('/clear', async (c) => {
   return c.text('Dashboard Cache Cleared! Please refresh your main page.');
 });
 
+// Start engine (admin only)
 dashboard.get('/start', async (c) => {
   const id = c.env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR');
   const stub = c.env.CHAIN_MONITOR.get(id);
@@ -37,6 +56,7 @@ dashboard.get('/start', async (c) => {
   return c.text('Tactical Engine Started!');
 });
 
+// Stop engine (admin only)
 dashboard.get('/stop', async (c) => {
   const id = c.env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR');
   const stub = c.env.CHAIN_MONITOR.get(id);

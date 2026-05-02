@@ -14,10 +14,11 @@ export type Env = {
     CHAIN_MONITOR: DurableObjectNamespace;
     JWT_SECRET: string;
     ENCRYPTION_SECRET: string;
+    COMMANDER_API_KEY: string;
     DISCORD_CLIENT_ID: string;
     DISCORD_CLIENT_SECRET: string;
     FACTION_ID: string;
-    ANALYTICS: AnalyticsEngineDataset;
+    ANALYTICS?: AnalyticsEngineDataset;
   }
 }
 
