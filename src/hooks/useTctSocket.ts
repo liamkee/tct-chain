@@ -47,7 +47,7 @@ export function useTctSocket() {
             }
             break;
           case 'HEARTBEAT':
-            // 可以在这里更新 lastUpdatedAt 来检测数据是否过期
+            useDashboardStore.getState().setHeartbeat(payload);
             break;
         }
       } catch (e) {

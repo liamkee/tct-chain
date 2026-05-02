@@ -60,30 +60,27 @@ export class TacticalCalculator {
   }
 
   /**
-   * 极限战力推演 (Max Potential Prediction)
+   * 极限战力推演 (Max Potential Prediction) - 即时爆种
    */
   static predictMaxPotential(member: MemberTacticalData) {
-    const { cooldowns, is_donator } = member;
-    
-    // 从基础可用能量开始 (Energy + Refill)
+    const { energy, cooldowns, is_donator } = member;
     let totalEnergy = this.getBaseAvailableEnergy(member);
 
-    // 1. Booster (FHC) 推演
+    // Booster (FHC) 推演
     let tempBoosterCD = cooldowns.booster;
     let fhcCount = 0;
     while (tempBoosterCD < TORN_RULES.BOOSTER_MAX_MINUTES) {
-      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, member.energy.max);
+      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy.max);
       tempBoosterCD += TORN_ITEMS.FHC.cooldown.base;
       fhcCount++;
-      // 特殊处理：理论极限第 5 张
       if (tempBoosterCD === TORN_RULES.BOOSTER_MAX_MINUTES) {
-        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, member.energy.max);
+        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy.max);
         fhcCount++;
         break;
       }
     }
 
-    // 2. Drug (Xanax) 推演
+    // Drug (Xanax) 推演
     let xanaxCount = 0;
     if (cooldowns.drug === 0) {
       totalEnergy += getItemEnergy(TORN_ITEMS.XANAX, is_donator);
@@ -102,21 +99,67 @@ export class TacticalCalculator {
   }
 
   /**
+   * 动态时间轴战力预测 (Time-Aware Potential Prediction)
+   * 计算在未来 targetMinutes 分钟内，该成员理论上能提供的最大击数。
+   */
+  static predictPotentialOverTime(member: MemberTacticalData, targetMinutes: number) {
+    const { energy, cooldowns, is_donator } = member;
+    
+    // 1. 基础可用能量 (当前 + 未使用的 Refill)
+    let totalEnergy = this.getBaseAvailableEnergy(member);
+
+    // 2. 自然回复 (Regen)
+    const regenInterval = is_donator ? TORN_RULES.REGEN_INTERVAL_DONATOR : TORN_RULES.REGEN_INTERVAL_NORMAL;
+    const totalRegenEnergy = Math.floor(targetMinutes / regenInterval) * TORN_RULES.REGEN_AMOUNT;
+    totalEnergy += totalRegenEnergy;
+
+    // 3. 资源释放推演 (随着时间流逝，CD 会下降)
+    let effectiveBoosterCD = Math.max(0, cooldowns.booster - targetMinutes);
+    let fhcCount = 0;
+    while (effectiveBoosterCD < TORN_RULES.BOOSTER_MAX_MINUTES) {
+      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy.max);
+      effectiveBoosterCD += TORN_ITEMS.FHC.cooldown.base;
+      fhcCount++;
+      if (effectiveBoosterCD === TORN_RULES.BOOSTER_MAX_MINUTES) {
+        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy.max);
+        fhcCount++;
+        break;
+      }
+    }
+
+    let xanaxCount = 0;
+    if (cooldowns.drug <= targetMinutes) {
+      totalEnergy += getItemEnergy(TORN_ITEMS.XANAX, is_donator);
+      xanaxCount++;
+    }
+
+    return {
+      totalPotentialEnergy: totalEnergy,
+      potentialHits: Math.floor(totalEnergy / TORN_RULES.ENERGY_PER_HIT),
+      predictionWindow: targetMinutes
+    };
+  }
+
+  /**
    * 聚合全帮派战力数据
    */
   static aggregate(members: Record<string, any>, selectedIds?: string[]) {
     let totalAvailableHits = 0;
     let totalMaxPotentialHits = 0;
+    let totalProjectedHits1h = 0; // 新增：1小时预测
     
     const targetMembers = selectedIds && selectedIds.length > 0 
       ? Object.entries(members).filter(([id]) => selectedIds.includes(id))
       : Object.entries(members);
 
     targetMembers.forEach(([_, data]) => {
-      const current = this.calculatePotential(data as MemberTacticalData);
-      const predicted = this.predictMaxPotential(data as MemberTacticalData);
+      const memberData = data as MemberTacticalData;
+      const current = this.calculatePotential(memberData);
+      const predictedMax = this.predictMaxPotential(memberData);
+      const projected1h = this.predictPotentialOverTime(memberData, 60);
       
-      totalMaxPotentialHits += predicted.maxPotentialHits;
+      totalMaxPotentialHits += predictedMax.maxPotentialHits;
+      totalProjectedHits1h += projected1h.potentialHits;
       if (current.isAvailable) {
         totalAvailableHits += current.availableHits;
       }
@@ -125,6 +168,7 @@ export class TacticalCalculator {
     return {
       totalAvailableHits,
       totalMaxPotentialHits,
+      totalProjectedHits1h,
       memberCount: targetMembers.length
     };
   }

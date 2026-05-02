@@ -26,6 +26,18 @@ interface DashboardState {
   microLogs: Array<{ ts: number, msg: string }>;
   lastUpdatedAt: number;
   
+  // Phase 3 推演数据
+  hpm: number;
+  recentHPM: number;
+  trend: 'UP' | 'DOWN' | 'STABLE';
+  eta: number;
+  tacticalAggregate: {
+    totalAvailableHits: number;
+    totalMaxPotentialHits: number;
+    totalProjectedHits1h: number;
+    memberCount: number;
+  } | null;
+
   // UI 状态
   isConnected: boolean;
   isStale: boolean;
@@ -44,6 +56,7 @@ interface DashboardState {
   setTarget: (val: number) => void;
   toggleFilter: (key: keyof DashboardState['filters']) => void;
   addLog: (log: { ts: number, msg: string }) => void;
+  setHeartbeat: (payload: any) => void; // 🚀 新增心跳处理
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
@@ -52,6 +65,11 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   globalSelectedMembers: [],
   microLogs: [],
   lastUpdatedAt: 0,
+  hpm: 0,
+  recentHPM: 0,
+  trend: 'STABLE',
+  eta: -1,
+  tacticalAggregate: null,
   isConnected: false,
   isStale: false,
   filters: {
@@ -124,5 +142,15 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   addLog: (log) => set((state) => {
     const newLogs = [log, ...state.microLogs].slice(0, 20);
     return { microLogs: newLogs };
-  })
+  }),
+
+  setHeartbeat: (payload) => set((state) => ({
+    lastUpdatedAt: payload.lastUpdatedAt,
+    hpm: payload.hpm,
+    recentHPM: payload.recentHPM,
+    trend: payload.trend,
+    eta: payload.eta,
+    tacticalAggregate: payload.aggregate || state.tacticalAggregate,
+    microLogs: payload.microLogs || state.microLogs
+  }))
 }));

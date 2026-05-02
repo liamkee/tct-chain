@@ -73,4 +73,18 @@ dashboard.get('/stop', async (c) => {
   return c.text('Tactical Engine Stopped!');
 });
 
+// Update sync offset (admin only)
+dashboard.post('/offset', adminOnly, async (c) => {
+  const body = await c.req.json();
+  const id = c.env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR');
+  const stub = c.env.CHAIN_MONITOR.get(id);
+  
+  const res = await stub.fetch('http://do/internal/offset', {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+  
+  return c.json(await res.json());
+});
+
 export default dashboard;

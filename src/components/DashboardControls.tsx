@@ -53,6 +53,24 @@ export const DashboardControls: React.FC = () => {
           />
         </div>
 
+        {/* Sync Offset */}
+        <div className="flex items-center gap-3 bg-black/40 px-3 py-1.5 rounded-lg border border-white/5">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Offset (ms)</span>
+          <input 
+            type="number" 
+            placeholder="0"
+            step="100"
+            onBlur={async (e) => {
+              const val = parseInt(e.target.value) || 0;
+              await fetch('/api/dashboard/offset', {
+                method: 'POST',
+                body: JSON.stringify({ offset: val })
+              });
+            }}
+            className="w-20 bg-transparent text-sm font-black font-mono text-amber-400 focus:outline-none border-b border-amber-500/30 focus:border-amber-500 text-center"
+          />
+        </div>
+
         <div className="flex items-center gap-2">
           <FilterButton 
             active={filters.hideOffline} 

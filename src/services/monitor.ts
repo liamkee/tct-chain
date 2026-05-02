@@ -13,6 +13,9 @@ export class ChainMonitor implements DurableObject {
   private memberStatusCache: Map<string, string> = new Map(); // id -> stringified status
   private memberMinutesCache: Map<string, number> = new Map(); // id -> last reported minute
   private memberBuffer: Map<string, any> = new Map(); // id -> latest updates (In-memory buffer)
+  private hpmHistory: number[] = []; // 存储每 10 秒的击数增量，最大长度 30 (5分钟)
+  private lastRTT: number = 0; // 最近一次 API 往返延迟 (ms)
+  private manualOffset: number = 0; // 指挥官手动微调 (ms)
   public lastUpdatedAt: number = 0; // 纯内存心跳
 
   constructor(state: DurableObjectState, env: Env['Bindings']) {
@@ -25,7 +28,11 @@ export class ChainMonitor implements DurableObject {
         'chain_current', 
         'chain_timeout', 
         'micro_logs',
-        'member_status_cache'
+        'member_status_cache',
+        'hpm_history',
+        'last_rtt',
+        'manual_offset',
+        'interval_counter'
       ]);
       
       // Durable Object storage get() returns a Map when requesting multiple keys
@@ -38,6 +45,10 @@ export class ChainMonitor implements DurableObject {
       if (statusMap) {
         this.memberStatusCache = new Map(Object.entries(statusMap));
       }
+
+      this.hpmHistory = storedMap.get('hpm_history') ?? [];
+      this.lastRTT = storedMap.get('last_rtt') ?? 0;
+      this.manualOffset = storedMap.get('manual_offset') ?? 0;
     });
   }
 
@@ -116,6 +127,16 @@ export class ChainMonitor implements DurableObject {
       } else {
         return new Response(JSON.stringify({ allowed: false, remaining: bucket.tokens, resetIn: bucket.resetAt - now }), { status: 429, headers: { 'Content-Type': 'application/json' } });
       }
+    }
+
+    if (url.pathname === '/internal/offset') {
+      const { offset } = await request.json() as { offset: number };
+      this.manualOffset = offset;
+      await this.state.storage.put('manual_offset', offset);
+      this.dispatchAlert(`Manual Sync Offset adjusted to ${offset}ms`);
+      return new Response(JSON.stringify({ success: true, offset }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // 内部数据写入接口 (Consumer 调用，写入抓取到的高频战术数据)
@@ -277,14 +298,18 @@ export class ChainMonitor implements DurableObject {
           this.commanderKeyCache = this.env.COMMANDER_API_KEY || (await this.env.TCT_KV.get('COMMANDER_API_KEY')) || 'MOCK_KEY';
         }
 
+        const t1 = Date.now();
         const res = await fetch(`https://api.torn.com/faction/${this.env.FACTION_ID}?selections=basic&key=${this.commanderKeyCache}`, { signal: controller.signal });
+        const t2 = Date.now();
+        this.lastRTT = t2 - t1;
+
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
         
         const data = await res.json() as any;
         if (data.error) throw new Error(`Torn API Error: ${data.error.error}`);
         
         const factionName = data.name || 'Unknown Faction';
-        console.log(`[DO] Polling Faction: ${factionName} (ID: ${this.env.FACTION_ID}). Members: ${Object.keys(data.members || {}).length}`);
+        console.log(`[DO] Polling: ${factionName} (RTT: ${this.lastRTT}ms)`);
         
         chainData = data.chain;
         membersData = data.members || {};
@@ -301,13 +326,33 @@ export class ChainMonitor implements DurableObject {
 
       if (chainData) {
         const { timeout, current, max } = chainData;
+        
+        // 🚀 最终倒计时合成公式
+        // adjustedTimeout = API返回的秒数 - (单程延迟/1000) + (手动微调/1000)
+        const adjustedTimeout = Math.max(0, timeout - (this.lastRTT / 2 / 1000) + (this.manualOffset / 1000));
+
         if (current !== this.lastChainCurrent || timeout !== this.lastChainTimeout) {
-          storageUpdates['chain_timeout'] = timeout;
+          // ... (HPM 逻辑保持不变)
+          if (this.lastChainCurrent !== -1) {
+            const hitsDelta = Math.max(0, current - this.lastChainCurrent);
+            this.hpmHistory.push(hitsDelta);
+            if (this.hpmHistory.length > 30) this.hpmHistory.shift();
+          }
+
+          storageUpdates['chain_timeout'] = adjustedTimeout; // 存入修正后的值
           storageUpdates['chain_current'] = current;
           storageUpdates['chain_max'] = max;
           this.lastChainCurrent = current;
-          this.lastChainTimeout = timeout;
+          this.lastChainTimeout = timeout; // 注意：这里对比原始 timeout 以检测 API 更新
           hasChanges = true;
+
+          // 🚀 风险警报检测 (Risk Management)
+          if (adjustedTimeout > 0 && adjustedTimeout < 60) {
+            this.dispatchAlert(`CRITICAL: Chain at risk! ${Math.floor(adjustedTimeout)}s remaining.`);
+          }
+        } else {
+           this.hpmHistory.push(0);
+           if (this.hpmHistory.length > 30) this.hpmHistory.shift();
         }
       }
 
@@ -450,10 +495,63 @@ export class ChainMonitor implements DurableObject {
       await this.state.storage.put('micro_logs', this.microLogs);
       await this.state.storage.put('chain_current', this.lastChainCurrent);
       await this.state.storage.put('chain_timeout', this.lastChainTimeout);
+      await this.state.storage.put('hpm_history', this.hpmHistory);
+      await this.state.storage.put('last_rtt', this.lastRTT);
       
 
 
-      this.broadcastToWebSockets({ type: 'HEARTBEAT', lastUpdatedAt: this.lastUpdatedAt, microLogs: this.microLogs });
+      // 🚀 计算 HPM (Trimmed Mean 剔除异常值)
+      let currentHPM = 0;
+      let recentHPM = 0; // 最近 1 分钟的 HPM
+
+      if (this.hpmHistory.length >= 6) {
+        const last6 = this.hpmHistory.slice(-6);
+        recentHPM = last6.reduce((a, b) => a + b, 0); // 6个10秒点即为1分钟总计
+      }
+
+      if (this.hpmHistory.length > 10) {
+        const sorted = [...this.hpmHistory].sort((a, b) => a - b);
+        const trimmed = sorted.slice(2, -2);
+        const sum = trimmed.reduce((a, b) => a + b, 0);
+        currentHPM = (sum / trimmed.length) * 6; 
+      } else {
+        const sum = this.hpmHistory.reduce((a, b) => a + b, 0);
+        currentHPM = (sum / (this.hpmHistory.length || 1)) * 6;
+      }
+
+      const chainMax = await this.state.storage.get<number>('chain_max') || 10;
+      const remainingHits = Math.max(0, chainMax - this.lastChainCurrent);
+      const etaMinutes = currentHPM > 0 ? remainingHits / currentHPM : -1;
+
+      // 判断趋势
+      const trend = recentHPM > currentHPM ? 'UP' : (recentHPM < currentHPM ? 'DOWN' : 'STABLE');
+
+      // 🚀 每 30 个周期 (5分钟) 转存一次到 D1 用于复盘
+      const intervalCounter = (await this.state.storage.get<number>('interval_counter') || 0) + 1;
+      if (intervalCounter >= 30) {
+         try {
+           await this.env.DB.prepare('INSERT INTO ChainHistory (timestamp, chain_count, hpm, eta, recent_hpm, metadata) VALUES (?, ?, ?, ?, ?, ?)')
+              .bind(Date.now(), this.lastChainCurrent, currentHPM, etaMinutes, recentHPM, JSON.stringify(this.hpmHistory))
+              .run();
+           await this.state.storage.put('interval_counter', 0);
+           console.log('[DO] Tactical snapshot archived to D1.');
+         } catch (dbErr: any) {
+           console.error('[DO] DB Archive Failed:', dbErr.message);
+         }
+      } else {
+         await this.state.storage.put('interval_counter', intervalCounter);
+      }
+
+      this.broadcastToWebSockets({ 
+        type: 'HEARTBEAT', 
+        lastUpdatedAt: this.lastUpdatedAt, 
+        microLogs: this.microLogs,
+        hpm: currentHPM,
+        recentHPM,
+        trend,
+        eta: etaMinutes,
+        aggregate
+      });
 
     } catch (err: any) {
       this.microLogs.push({ ts: Date.now(), msg: `alarm error: ${err.message}` });
@@ -470,5 +568,13 @@ export class ChainMonitor implements DurableObject {
         ws.send(message);
       } catch (e) {}
     });
+  }
+
+  private dispatchAlert(msg: string) {
+    console.warn(`[ALERT] ${msg}`);
+    this.microLogs.push({ ts: Date.now(), msg: `⚠️ ${msg}` });
+    if (this.microLogs.length > 20) this.microLogs.shift();
+    // 未来在这里对接 Discord Webhook
+    this.broadcastToWebSockets({ type: 'LOG_UPDATE', microLogs: this.microLogs });
   }
 }

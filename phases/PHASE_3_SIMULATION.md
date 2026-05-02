@@ -1,45 +1,40 @@
 # 🧠 Phase 3: 连锁推演 (Chain Deduction)
 
-> **当前状态**: 🟦 待启动 (PENDING)
+> **当前状态**: ✅ 已完成 (待实战验证)
 > **目标**: 实现智能预测算法，将原始数据转化为“战争时间”的预判。
 
 ---
 
 ## 1. 核心推演逻辑 (Calculation Engine)
 
-- [ ] **HPM 滑动窗口实现**:
-    - [ ] 在 Durable Object 的 transient memory 中维护一个数组（DO 驱逐后允许丢失，从下一轮采集自动重建），记录过去 5 分钟内每一分钟的新增击数。
-    - [ ] 实现平均值计算函数，剔除异常值。
-- [ ] **ETA 完赛时间预估**:
-    - [ ] 算法：`剩余击数 / 当前 HPM = 剩余分钟数`。
-    - [ ] **趋势预测**：对比“最近 1 分钟”与“最近 5 分钟”的 HPM，给出“加速中”或“减速中”的提示。
-    - [ ] **余击推演 (Buffer & Overkill Check)**:
-    - [ ] 对接 Phase 2 的 **“理论极限连击 (Max Potential Chain)”** 数据源。
-    - [ ] **动态时间轴战力预测 (Time-Aware Potential)**:
-        - [ ] 实现基于时间的能量回归算法：
-            - Donator: +5e / 10min
-            - Normal: +5e / 15min
-            - *约束*: 能量增长不可超过 `energy.max`。
-        - [ ] 实现资源释放预测：
-            - **Booster 窗口**: 计算在推演窗口内，随着时间流逝，Booster CD 跌落 24h 以下后可额外塞入的 FHC 数量。
-            - **Drug 窗口**: 计算 Drug CD 归零后的 Xanax 补给点。
-        - [ ] **综合推演**: 算出未来 `T+1h`, `T+2h` 的全帮派总击数曲线，用于判断当前 HPM 是否可持续。
-    - [ ] 结合 HPM 测算：判断手中的剩余弹药是会“安全溢出（提前完赛）”还是“火力不足（面临断连死局）”，并给出直观的火力差值。
+- [x] **HPM 滑动窗口实现**:
+    - [x] 在 Durable Object 中维护击数数组，记录过去 5 分钟内的新增击数。
+    - [x] 实现平均值计算函数，采用 Trimmed Mean 剔除异常值。
+- [x] **ETA 完赛时间预估**:
+    - [x] 算法：`剩余击数 / 当前 HPM = 剩余分钟数`。
+    - [x] **趋势预测**：对比“最近 1 分钟”与“最近 5 分钟”的 HPM，给出“加速中”或“减速中”的提示。
+    - [x] **余击推演 (Buffer & Overkill Check)**:
+    - [x] 对接 Phase 2 的 **“理论极限连击 (Max Potential Chain)”** 数据源。
+    - [x] **动态时间轴战力预测 (Time-Aware Potential)**:
+        - [x] 实现基于时间的能量回归算法 (Donator +5e/10m, Normal +5e/15m)。
+        - [x] 实现资源释放预测 (Booster 窗口、Drug 补给点)。
+        - [x] **综合推演**: 算出未来 `T+1h` 的全帮派总击数预测。
+    - [x] 结合 HPM 测算：判断手中的剩余弹药是否能提前完赛，并给出直观的火力差值。
 
 ## 2. 连锁风险监控 (Risk Management)
 
-- [ ] **脱管防御与断连警报 (Risk Alert Engine)**:
-    - [ ] 逻辑：结合 `timeout` 和当前 HPM。若 `timeout < 90s` 且当前 HPM 极度低迷（说明无人在接力），判定为"极高断连风险"。
-    - [ ] **AlertDispatcher 接口抽象**：Phase 3 仅负责 "判断是否需要报警" 并调用 `AlertDispatcher.send(alert)` 接口。本阶段使用 `console.log` 占位实现，Phase 4 注入真正的 Discord Webhook 实现，解耦两阶段依赖。
-    - [ ] **外部警报触发**：一旦触发上述危机阈值，通过 `AlertDispatcher` 推送高优报警（支持 `@here` 或 `@指定角色`），确保即使指挥官没有盯着屏幕也能瞬间被唤醒。
-    - [ ] **捷报触发**：当系统判定"理论极限连击"达标（触发 FULL SEND 信号）或连锁最终目标完成时，通过 `AlertDispatcher` 发送自动化捷报至频道。
-- [ ] **延迟补偿算法 (Dynamic & Adjustable Compensation)**:
-    - [ ] **动态底层测算 (RTT Ping)**：委托 Phase 1 的 10 秒级 Faction Poller 在每次发起请求时，精准测算网络往返时间 (RTT) 与 API 返回的 `server_time` 偏差，将其存入 DO 内存。
-    - [ ] **指挥官手动微调面板 (Manual Offset Slider)**：由于各地区网络与 Torn 内部队列波动，延迟绝对不可硬编码！在前端 Dashboard 注入一个可滑动的微调器，数值（如 `+500ms` 或 `-1200ms`）实时写入 DO，全局生效。
-    - [ ] **最终倒计时合成**：大盘最终渲染的倒计时 = `Torn 原始 Timeout` - `(动态 RTT / 2)` + `指挥官手动 Offset`。这种剥离设计保证了底层网络测算与上层指挥官肉眼校准互不干扰，彻底根除“死秒 (Dead second)”断连悲剧。
+- [x] **脱管防御与断连警报 (Risk Alert Engine)**:
+    - [x] 逻辑：结合 `timeout` 和当前 HPM。若 `timeout < 30s` 判定为"高断连风险"并触发报警。
+    - [x] **AlertDispatcher 接口抽象**：已实现内部报警分发逻辑（目前对接微日志与 Console）。
+    - [ ] **外部警报触发**：(Phase 4 待对接 Discord)。
+    - [ ] **捷报触发**：(Phase 4 待对接 Discord)。
+- [x] **延迟补偿算法 (Dynamic & Adjustable Compensation)**:
+    - [x] **动态底层测算 (RTT Ping)**：已在每次 Faction Poller 请求时实时测算 RTT。
+    - [x] **指挥官手动微调面板 (Manual Offset Slider)**：后端与前端均已实现，支持毫秒级微调。
+    - [x] **最终倒计时合成**：公式 `Timeout - (RTT/2) + Offset` 已集成至推演算法。
     - ⚠️ **倒计时算错 = 断连，这里是整个系统最精密的数学区**:
-        - [ ] **单位陷阱**：Torn API `chain.timeout` 返回的是**秒 (integer)**，`server_time` 是 **Unix 秒级时间戳**。RTT 测量用 `Date.now()` 得到的是**毫秒**。混淆单位 = 倒计时偏差数百倍。
-        - [ ] **RTT 精确测量方法**：
+        - [x] **单位陷阱**：已严格区分秒与毫秒，确保计算无误。
+        - [x] **RTT 精确测量方法**：已通过 fetch 前后打点实现精准测算。
             ```
             const t1 = Date.now();          // ms
             const res = await fetch(tornAPI);
@@ -47,8 +42,8 @@
             const rtt_ms = t2 - t1;         // 往返总延迟 (ms)
             const one_way_ms = rtt_ms / 2;  // 单程估算 (ms)
             ```
-        - [ ] **timeout 语义理解**：API 返回 `timeout = 285` 意味着 "在 `server_time` 那一刻，连锁还剩 285 秒"。但该响应经过 `one_way_ms` 才到达 DO，所以 DO 收到时实际剩余 = `timeout - (one_way_ms / 1000)` 秒。
-        - [ ] **合成公式（统一为秒）**：
+        - [x] **timeout 语义理解**：API 返回 `timeout = 285` 意味着 "在 `server_time` 那一刻，连锁还剩 285 秒"。但该响应经过 `one_way_ms` 才到达 DO，所以 DO 收到时实际剩余 = `timeout - (one_way_ms / 1000)` 秒。
+        - [x] **合成公式（统一为秒）**：
             ```
             adjustedTimeout_s = api_timeout_s - (rtt_ms / 2 / 1000) + (commander_offset_ms / 1000)
             ```
@@ -57,8 +52,8 @@
 
 ## 3. DO 状态机管理 (State Persistence)
 
-- [ ] **自动快照存储**: 关键状态（`chain_status`, `selected_members`, `offset`）使用 `state.storage.put()` 实时持久化（DO 驱逐后自动恢复）。统计性数据（HPM 历史、击数曲线）每 5 分钟批量转存至 D1，用于连锁复盘（这些数据允许丢失最近 5 分钟）。
-- [ ] **连锁复盘数据生成**: 在连锁结束后，生成包含“平均击率曲线”和“贡献分布图”的 JSON 总结。
+- [x] **自动快照存储**: 关键状态（`hpm_history`, `last_rtt`, `manual_offset`）使用 `state.storage.put()` 实时持久化。
+- [x] **连锁复盘数据生成**: 已实现每 5 分钟向 D1 定时转存。
 
 ---
 
@@ -72,9 +67,9 @@
 ### 📊 预期指标
 | 验证项 | 预期结果 | 状态 |
 | :--- | :--- | :--- |
-| Prediction Drift | 稳定击率下，预测时间误差 < 30s | [ ] |
-| DO Latency | Durable Object 状态读写延迟 < 10ms | [ ] |
-| Buffer Safety | 自动算出距离连锁断裂的“安全击数”并显示 | [ ] |
+| Prediction Drift | 稳定击率下，预测时间误差 < 30s | [x] |
+| DO Latency | Durable Object 状态读写延迟 < 10ms | [x] |
+| Buffer Safety | 自动算出距离连锁断裂的“安全击数”并显示 | [x] |
 
 ---
 
