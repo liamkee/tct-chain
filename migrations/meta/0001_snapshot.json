@@ -1,6 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
+  "id": "5333b4d3-7709-4506-9ace-890af1c00669",
+  "prevId": "7fa2b3a6-e069-4424-bcde-4eb912b1c16b",
   "tables": {
     "Members": {
       "name": "Members",
@@ -50,19 +52,29 @@
           "default": "'member'"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "discord_id_idx": {
+          "name": "discord_id_idx",
+          "columns": [
+            "discord_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     }
   },
+  "views": {},
   "enums": {},
   "_meta": {
+    "schemas": {},
     "tables": {},
     "columns": {}
   },
-  "id": "7fa2b3a6-e069-4424-bcde-4eb912b1c16b",
-  "prevId": "00000000-0000-0000-0000-000000000000",
-  "views": {}
+  "internal": {
+    "indexes": {}
+  }
 }

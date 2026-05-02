@@ -24,30 +24,18 @@ export type Env = {
 import { getCookie } from 'hono/cookie'
 import { verify } from 'hono/jwt'
 
-const app = new Hono<Env>()
+const app = new Hono<Env>();
 
-// 🚀 WebSocket Auth Gateway
-app.get('/ws', async (c) => {
-  const token = getCookie(c, 'tct_session')
-  if (!token) return c.text('Unauthorized', 401)
+// 🚀 API 路由必须挂载
+app.route('/api', api);
 
-  try {
-    const payload = await verify(token, c.env.JWT_SECRET, 'HS256')
-    const id = c.env.CHAIN_MONITOR.idFromName(c.env.FACTION_ID)
-    const stub = c.env.CHAIN_MONITOR.get(id)
-
-    // 转发给 DO 处理 (包含 userId 方便 DO 做定向推送)
-    const url = new URL(c.req.url)
-    url.pathname = '/ws'
-    url.searchParams.set('userId', payload.torn_id as string)
-    
-    return stub.fetch(new Request(url, c.req.raw))
-  } catch (e) {
-    return c.text('Invalid Session', 401)
-  }
-})
-
-app.route('/api', api)
+// 🚀 WebSocket 网关
+app.all('/ws', async (c) => {
+  console.log('[WS] Incoming connection attempt...');
+  const id = c.env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR');
+  const stub = c.env.CHAIN_MONITOR.get(id);
+  return stub.fetch(c.req.raw);
+});
 
 // SPA fallback in production
 app.get('*', async (c, next) => {

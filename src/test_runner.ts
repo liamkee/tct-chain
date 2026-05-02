@@ -1,5 +1,5 @@
 
-import { Env } from '../index';
+import type { Env } from './index';
 
 export default {
   async fetch(request: Request, env: Env['Bindings']): Promise<Response> {

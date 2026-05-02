@@ -1,0 +1,1 @@
+CREATE INDEX `discord_id_idx` ON `Members` (`discord_id`);

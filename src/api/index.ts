@@ -5,6 +5,7 @@ import { setCookie } from 'hono/cookie'
 import { members } from '../db/schema'
 import auth from './auth'
 import admin from './admin'
+import dashboard from './dashboard'
 
 export type Env = {
   Bindings: {
@@ -18,6 +19,7 @@ export type Env = {
     JWT_SECRET: string;
     ENCRYPTION_SECRET: string;
     FACTION_ID: string;
+    COMMANDER_API_KEY: string;
   }
 }
 
@@ -25,6 +27,7 @@ const api = new Hono<Env>()
 
 api.route('/auth', auth)
 api.route('/admin', admin)
+api.route('/dashboard', dashboard)
 
 // Development/Test Routes (Restricted)
 api.use('/test/*', async (c, next) => {

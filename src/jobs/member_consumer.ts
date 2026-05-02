@@ -29,10 +29,18 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
   }
 
   await Promise.allSettled(batch.messages.map(async (message) => {
-    const { tornId, apiKey, ts } = message.body;
+    const { tornId, apiKey, ts, test } = message.body;
+    
+    // 🚀 静默过滤健康检查产生的垃圾消息
+    if (test === 'Ping from health check!') {
+      message.ack();
+      return;
+    }
+
+    console.log(`[Queue] Received task for ${tornId || 'UNKNOWN'}. Attempts: ${message.attempts}`);
 
     if (!tornId) {
-       console.error('[Queue] Received message with missing tornId. Acknowledging to prevent loop.');
+       console.error('[Queue] Error: Message body is empty or missing tornId:', message.body);
        message.ack();
        return;
     }
@@ -60,13 +68,17 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
        return;
     }
 
-    // 使用 bars 获取 Energy/Life/Happy, 使用 cooldowns 获取全套 CD
-    let selections = 'bars,cooldowns';
+    // 使用 bars 获取 Energy, cooldowns 获取 CD, icons 用于检测 Refill 是否可用, basic 获取状态
+    // 🚀 升级：加入 refills 接口，获取更精确的补给数据
+    let selections = 'bars,cooldowns,icons,basic,refills';
 
     try {
       const res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${apiKey}`);
       
       const data = await res.json() as any;
+      // 🚀 修正：Torn API 的 bars 数据通常直接平铺在根部
+      console.log(`[Queue] Raw data for ${tornId}: Energy=${data.energy?.current}, Refill=${data.refills?.energy}`);
+      
       if (data.error) {
          apiManager.logAnalytics('api_error', tornId, data.error.error);
          if (data.error.code === 2) {
@@ -77,24 +89,31 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
          throw new Error(`Torn Error: ${data.error.error}`);
       }
 
-      await monitor.fetch('http://do/internal/update-member', {
+      const updateRes = await monitor.fetch('http://do/internal/update-member', {
          method: 'POST',
          body: JSON.stringify({
             id: tornId,
             updates: {
-               // 精确映射：bars 包含 energy, nerve, happy, life
-               energy: data.bars?.energy?.current,
-               energy_max: data.bars?.energy?.maximum,
-               // CD 包含 drug, medical, booster
+               energy: data.energy?.current,
+               energy_max: data.energy?.maximum,
                cooldowns: data.cooldowns,
+               status: data.status,
+               last_action: data.last_action,
+               // 显式逻辑：如果 energy 是 false，才代表 USED
+               refill_used: data.refills ? data.refills.energy === false : !data.icons?.icon70,
                last_updated: Math.floor(Date.now() / 1000)
             }
          })
       });
+
+      if (!updateRes.ok) {
+        const errText = await updateRes.text();
+        console.error(`[Queue] DO Update Failed for ${tornId}: ${updateRes.status} ${errText}`);
+      } else {
+        console.log(`[Queue] Successfully pushed updates for ${tornId} to DO.`);
+      }
     } catch (err: any) {
-      console.error(`[Queue] Error processing ${tornId}:`, err);
-      // throw to trigger generic retry logic if needed, but since it's Promise.allSettled, it will just fail this single promise
-      // Wait, if it fails, we should retry the message!
+      console.error(`[Queue] Critical Error processing ${tornId}:`, err);
       message.retry();
     }
   }));
