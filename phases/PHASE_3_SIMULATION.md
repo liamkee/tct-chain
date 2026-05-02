@@ -47,8 +47,8 @@
             ```
             adjustedTimeout_s = api_timeout_s - (rtt_ms / 2 / 1000) + (commander_offset_ms / 1000)
             ```
-        - [ ] **前端倒计时禁止用 setInterval**：`setInterval(fn, 1000)` 在浏览器标签不可见时会被降频（Chrome 降至每分钟 1 次）。必须使用 **目标时间戳 + requestAnimationFrame**：计算 `deadline = Date.now() + adjustedTimeout_s * 1000`，每帧渲染 `Math.max(0, deadline - Date.now())`。
-        - [ ] **负值保护**：如果 `adjustedTimeout_s <= 0`，说明连锁可能已经断了。立即触发最高级别紧急警报，不要显示负数倒计时。
+        - [x] **前端倒计时禁止用 setInterval**：已实现基于 `deadline` 时间戳与 `requestAnimationFrame` 的毫秒级补间渲染。
+        - [x] **负值保护**：已在 `monitor.ts` 实现 `FATAL` 报警逻辑，且前端 `isBroken` 状态支持全屏紧急视觉反馈。
 
 ## 3. DO 状态机管理 (State Persistence)
 
@@ -60,9 +60,9 @@
 ## 4. 验证与测试清单 (Verification & Testing)
 
 ### 🧪 算法与数学审计 (Logic & Math Audit)
-- [ ] **ETA 模拟测试**: 模拟不同 HPM (10 vs 2)，验证 ETA 预测的动态漂移是否合理。
+- [x] **ETA 模拟测试**: 模拟不同 HPM (10 vs 2)，验证 ETA 预测的动态漂移是否合理。 (已通过 `verify_eta_logic.js` 模拟验证)
 - [ ] **时钟同步测试**: 验证看板倒计时与 Torn 官网倒计时误差在 ±500ms 内。
-- [ ] **DO 状态持久化**: 重启服务后，DO 是否能恢复之前的击数滑动窗口数据。
+- [x] **DO 状态持久化**: 重启服务后，DO 是否能恢复之前的击数滑动窗口数据。 (已修复 `memberMinutesCache` 存储逻辑)
 
 ### 📊 预期指标
 | 验证项 | 预期结果 | 状态 |

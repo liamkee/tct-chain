@@ -1,3 +1,4 @@
+import { useEffect, useState, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useTctSocket } from '../hooks/useTctSocket'
 import { useDashboardStore } from '../hooks/useDashboardStore'
@@ -20,11 +21,28 @@ function Index() {
   const eta = useDashboardStore((state) => state.eta);
   const tacticalAggregate = useDashboardStore((state) => state.tacticalAggregate);
 
+  // 🚀 本地平滑倒计时状态
+  const [localTimeout, setLocalTimeout] = useState(chain.timeout);
+  const requestRef = useRef<number>(0);
+
+  useEffect(() => {
+    const animate = () => {
+      const now = Date.now();
+      const diff = Math.max(0, (chain.deadline - now) / 1000);
+      setLocalTimeout(diff);
+      requestRef.current = requestAnimationFrame(animate);
+    };
+    
+    requestRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [chain.deadline]);
+
   // 格式化倒计时
   const formatTimeout = (s: number) => {
     const mins = Math.floor(s / 60);
-    const secs = s % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    const secs = Math.floor(s % 60);
+    const ms = Math.floor((s % 1) * 100); // 增加毫秒显示增强紧迫感
+    return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
   };
 
   const formatETA = (minutes: number) => {
@@ -35,14 +53,15 @@ function Index() {
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
-  const isCritical = chain.timeout > 0 && chain.timeout < 60;
+  const isCritical = localTimeout > 0 && localTimeout < 60;
+  const isBroken = localTimeout <= 0 && chain.current > 0; // 这里的逻辑可以根据实际情况微调
   const progress = Math.min(100, (chain.current / (chain.target || 1)) * 100);
 
   return (
-    <div className={`min-h-screen bg-black text-zinc-100 selection:bg-indigo-500/30 transition-colors duration-500 ${isCritical ? 'shadow-[inset_0_0_100px_rgba(239,68,68,0.2)]' : ''}`}>
+    <div className={`min-h-screen bg-black text-zinc-100 selection:bg-indigo-500/30 transition-colors duration-500 ${isCritical ? 'shadow-[inset_0_0_100px_rgba(239,68,68,0.2)]' : ''} ${isBroken ? 'shadow-[inset_0_0_100px_rgba(239,68,68,0.5)]' : ''}`}>
       {/* 🚨 紧急警报：全屏闪红灯 */}
-      {isCritical && (
-        <div className="fixed inset-0 pointer-events-none z-100 animate-[pulse_1.5s_infinite] border-10 border-rose-500/20" />
+      {(isCritical || isBroken) && (
+        <div className={`fixed inset-0 pointer-events-none z-100 animate-[pulse_1s_infinite] border-10 ${isBroken ? 'border-rose-600' : 'border-rose-500/20'}`} />
       )}
 
       {/* 顶部作战指挥栏 (War Room Header) */}
@@ -101,8 +120,8 @@ function Index() {
 
             <div className="text-center">
               <span className="block text-[10px] text-zinc-500 font-bold mb-1 uppercase tracking-wider">Remaining</span>
-              <span className={`text-4xl font-black font-mono tracking-tighter transition-colors ${isCritical ? 'text-rose-500 animate-pulse' : 'text-white'}`}>
-                {formatTimeout(chain.timeout)}
+              <span className={`text-4xl font-black font-mono tracking-tighter transition-colors ${isCritical || isBroken ? 'text-rose-500 animate-pulse' : 'text-white'}`}>
+                {formatTimeout(localTimeout)}
               </span>
             </div>
           </div>
@@ -150,6 +169,14 @@ function Index() {
                 <div className="text-center">
                   <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Theoretical Max</span>
                   <span className="text-xl font-mono font-black text-zinc-300">{tacticalAggregate?.totalMaxPotentialHits || 0}</span>
+                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+                </div>
+                <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
+                <div className="text-center">
+                  <span className="block text-[10px] text-rose-500/80 font-bold uppercase mb-1">Buffer Safety</span>
+                  <span className={`text-xl font-mono font-black ${localTimeout < 60 ? 'text-rose-500' : 'text-zinc-100'}`}>
+                    {Math.floor(hpm * (localTimeout / 60))}
+                  </span>
                   <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
                 </div>
               </div>

@@ -15,6 +15,7 @@ interface ChainStatus {
   current: number;
   max: number;
   timeout: number;
+  deadline: number; // 🚀 目标过期时间戳 (ms)
   target: number; // 🚀 目标连锁
 }
 
@@ -61,7 +62,7 @@ interface DashboardState {
 
 export const useDashboardStore = create<DashboardState>((set) => ({
   members: {},
-  chain: { current: 0, max: 0, timeout: 0, target: 100 },
+  chain: { current: 0, max: 0, timeout: 0, deadline: 0, target: 100 },
   globalSelectedMembers: [],
   microLogs: [],
   lastUpdatedAt: 0,
@@ -85,6 +86,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     const chain = {
       current: data.chain_current || data.status?.chainCurrent || 0,
       timeout: data.chain_timeout || data.status?.chainTimeout || 0,
+      deadline: Date.now() + (data.chain_timeout || data.status?.chainTimeout || 0) * 1000,
       max: data.chain_max || 10,
       target: data.chain_target || 0
     };
@@ -124,7 +126,11 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   })),
 
   updateChain: (updates) => set((state) => ({
-    chain: { ...state.chain, ...updates }
+    chain: { 
+      ...state.chain, 
+      ...updates,
+      deadline: updates.timeout !== undefined ? Date.now() + updates.timeout * 1000 : state.chain.deadline
+    }
   })),
 
   setSquad: (members) => set({ globalSelectedMembers: members }),

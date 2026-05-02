@@ -12,7 +12,6 @@ export class ChainMonitor implements DurableObject {
   private lastChainTimeout: number = -1;
   private memberStatusCache: Map<string, string> = new Map(); // id -> stringified status
   private memberMinutesCache: Map<string, number> = new Map(); // id -> last reported minute
-  private memberBuffer: Map<string, any> = new Map(); // id -> latest updates (In-memory buffer)
   private hpmHistory: number[] = []; // 存储每 10 秒的击数增量，最大长度 30 (5分钟)
   private lastRTT: number = 0; // 最近一次 API 往返延迟 (ms)
   private manualOffset: number = 0; // 指挥官手动微调 (ms)
@@ -29,6 +28,7 @@ export class ChainMonitor implements DurableObject {
         'chain_timeout', 
         'micro_logs',
         'member_status_cache',
+        'member_minutes_cache',
         'hpm_history',
         'last_rtt',
         'manual_offset',
@@ -44,6 +44,11 @@ export class ChainMonitor implements DurableObject {
       const statusMap = storedMap.get('member_status_cache');
       if (statusMap) {
         this.memberStatusCache = new Map(Object.entries(statusMap));
+      }
+
+      const minutesMap = storedMap.get('member_minutes_cache');
+      if (minutesMap) {
+        this.memberMinutesCache = new Map(Object.entries(minutesMap));
       }
 
       this.hpmHistory = storedMap.get('hpm_history') ?? [];
@@ -221,6 +226,7 @@ export class ChainMonitor implements DurableObject {
     if (url.pathname === '/internal/clear') {
        await this.state.storage.deleteAll();
        this.memberStatusCache.clear(); // 🚀 同时清空内存缓存
+       this.memberMinutesCache.clear();
        console.log('[DO] Storage and memory cache cleared successfully.');
        return new Response('Storage Cleared');
     }
@@ -347,7 +353,9 @@ export class ChainMonitor implements DurableObject {
           hasChanges = true;
 
           // 🚀 风险警报检测 (Risk Management)
-          if (adjustedTimeout > 0 && adjustedTimeout < 60) {
+          if (adjustedTimeout <= 0) {
+            this.dispatchAlert(`FATAL: Chain broken or near zero! 0s remaining.`);
+          } else if (adjustedTimeout < 60) {
             this.dispatchAlert(`CRITICAL: Chain at risk! ${Math.floor(adjustedTimeout)}s remaining.`);
           }
         } else {
@@ -479,17 +487,7 @@ export class ChainMonitor implements DurableObject {
 
       if (hasChanges) {
         await this.state.storage.put('member_status_cache', Object.fromEntries(this.memberStatusCache));
-      }
-
-      if (this.memberBuffer.size > 0) {
-        const batchUpdates: Record<string, any> = {};
-        for (const [id, updates] of this.memberBuffer.entries()) {
-          for (const [k, v] of Object.entries(updates)) {
-            batchUpdates[`member_${id}_${k}`] = v;
-          }
-        }
-        await this.state.storage.put(batchUpdates);
-        this.memberBuffer.clear();
+        await this.state.storage.put('member_minutes_cache', Object.fromEntries(this.memberMinutesCache));
       }
 
       await this.state.storage.put('micro_logs', this.microLogs);
