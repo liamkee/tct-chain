@@ -38,9 +38,7 @@ class_name = "ChainMonitor"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["ChainMonitor"]
+new_sqlite_classes = ["ChainMonitor"]
 
 [vars]
-FACTION_ID = "12345"
-JWT_SECRET = "test-secret"
-ENCRYPTION_SECRET = "test-encryption-secret-32-chars-!!"
+FACTION_ID = "53822"

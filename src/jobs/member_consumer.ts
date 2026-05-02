@@ -31,6 +31,12 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
   await Promise.allSettled(batch.messages.map(async (message) => {
     const { tornId, apiKey, ts } = message.body;
 
+    if (!tornId) {
+       console.error('[Queue] Received message with missing tornId. Acknowledging to prevent loop.');
+       message.ack();
+       return;
+    }
+
     // 🚀 核心防护：旧请求消除逻辑 (Old Request Elimination)
     // 如果消息在队列中积压超过 60 秒，说明 Producer 已经发出了更鲜活的数据，旧的直接丢弃。
     if (ts && Date.now() - ts > 60000) {
