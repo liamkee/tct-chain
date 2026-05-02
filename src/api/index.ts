@@ -85,8 +85,8 @@ api.post('/test/concurrency', async (c) => {
 
 // Global Master Switch Middleware (Edge Interception)
 export const checkMasterSwitch = async (c: any, next: any) => {
-  // Cloudflare KV requirement: cacheTtl must be at least 30s
-  const state = await c.env.TCT_KV.get('SYSTEM_MASTER_SWITCH', { cacheTtl: 30 });
+  // Cloudflare KV requirement: cacheTtl must be at least 60s
+  const state = await c.env.TCT_KV.get('SYSTEM_MASTER_SWITCH', { cacheTtl: 60 });
   
   if (state === 'OFF') {
     return c.json({ 
