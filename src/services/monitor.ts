@@ -365,7 +365,25 @@ export class ChainMonitor implements DurableObject {
         const activeMemberKeys = new Map(dbMembers.results.map((m: any) => [m.torn_id.toString(), m.api_key]));
 
         const allFactionIds = Object.keys(membersData);
-        const membersToUpdate = allFactionIds.filter(id => activeMemberKeys.has(id));
+        const membersToUpdate = allFactionIds.filter(id => {
+          if (!activeMemberKeys.has(id)) return false;
+          
+          const member = membersData[id];
+          const status = member.status;
+          
+          // 🚀 Circuit Breaker: Skip members who cannot be attacked
+          if (status) {
+            // If in Hospital or Jail for more than 1 hour
+            if ((status.state === 'Hospital' || status.state === 'Jail') && (status.until || 0) > Date.now() / 1000 + 3600) {
+              return false;
+            }
+            // If Traveling
+            if (status.state === 'Traveling') {
+              return false;
+            }
+          }
+          return true;
+        });
 
         if (membersToUpdate.length > 0) {
           console.log(`[DO] Tactical match: Sending ${membersToUpdate.length} members to Queue for analysis.`);

@@ -1,0 +1,18 @@
+
+10. __root.tsx 引用了不存在的路由
+Nav 栏中链接了 /dashboard、/members、/settings，但 src/routes/ 目录下只有 __root.tsx 和 index.tsx。这三个路由不存在，点击会 404。
+
+11. wrangler.toml 缺少 [triggers] (Cron)
+src/index.ts 导出了 scheduled handler，但 wrangler.toml 没有配置 [triggers] / crons。Cron Job 不会被触发。
+
+🟢 低优先级 (Low)
+12. .dev.vars 安全问题
+.dev.vars 没有被 .gitignore 排除。目前 .gitignore 只排除了 .env，不包括 .dev.vars。如果推送到公开仓库，API Key 会泄露。
+
+13. test_runner.ts 未被引用
+src/test_runner.ts 导出了一个 fetch handler，但 src/index.ts 没有引用它。这是死代码。
+
+14. calculator.ts — maxEnergy 计算逻辑不完整
+javascript
+maxEnergy: is_donator ? 150 : 100
+Torn 的 donator 最大能量是 250（不是 150），且 refill 补充的数量也是 150（donator）或 100（非 donator），但 maxEnergy 跟 refill 金额是两个不同的概念。

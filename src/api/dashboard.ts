@@ -12,16 +12,25 @@ dashboard.use('*', async (c, next) => {
 
   try {
     const payload = await verify(token, c.env.JWT_SECRET, 'HS256') as any
-    // Destructive operations require admin role
-    const path = new URL(c.req.url).pathname
-    if ((path.endsWith('/start') || path.endsWith('/stop') || path.endsWith('/clear')) && payload.role !== 'admin') {
-      return c.json({ error: 'Forbidden: Admin access required' }, 403)
-    }
+    c.set('jwtPayload', payload) // Store payload for later use
     await next()
   } catch (e) {
     return c.json({ error: 'Invalid Session' }, 401)
   }
 })
+
+// Admin-only protection for destructive routes
+const adminOnly = async (c: any, next: any) => {
+  const payload = c.get('jwtPayload')
+  if (payload?.role !== 'admin') {
+    return c.json({ error: 'Forbidden: Admin access required' }, 403)
+  }
+  await next()
+}
+
+dashboard.use('/start', adminOnly)
+dashboard.use('/stop', adminOnly)
+dashboard.use('/clear', adminOnly)
 
 // Initial snapshot (any authenticated user)
 dashboard.get('/snapshot', async (c) => {

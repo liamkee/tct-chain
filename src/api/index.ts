@@ -48,7 +48,7 @@ api.post('/test/mock-login', async (c) => {
   
   setCookie(c, 'tct_session', token, {
     httpOnly: true,
-    secure: false, // Local testing doesn't always have HTTPS
+    secure: new URL(c.req.url).protocol === 'https:',
     sameSite: 'Lax',
     path: '/'
   });

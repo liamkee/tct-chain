@@ -42,3 +42,6 @@ new_sqlite_classes = ["ChainMonitor"]
 
 [vars]
 FACTION_ID = "53822"
+
+[triggers]
+crons = ["*/1 * * * *"]

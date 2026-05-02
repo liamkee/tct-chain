@@ -30,22 +30,22 @@ export class TacticalCalculator {
     const { energy, is_donator, refill_used, last_action } = member;
     
     // 1. 判断是否“在线/可出击”
-    // 注意：Torn API 的状态非常多，这里简化逻辑
-    const isAvailable = last_action.status !== 'Offline' && !member.last_action.status.includes('Hospital');
+    const isAvailable = last_action.status !== 'Offline' && !last_action.status.includes('Hospital');
     
     // 2. 计算剩余潜在出击数 (假设每次攻击消耗 25 能量)
     let potentialHits = Math.floor(energy.current / 25);
     
-    // 如果 Refill 没用过，额外增加 100/150 能量对应的次数
+    // 如果 Refill 没用过，额外增加能量对应的次数
+    // 注意：Torn 中 Refill 补充的数量等于你的当前最大能量 (通常是 100/150，但有 Merit 时最高 250)
     if (!refill_used) {
-      const refillEnergy = is_donator ? 150 : 100;
+      const refillEnergy = energy.max || (is_donator ? 150 : 100);
       potentialHits += Math.floor(refillEnergy / 25);
     }
     
     return {
       isAvailable,
       potentialHits,
-      maxEnergy: is_donator ? 150 : 100
+      maxEnergy: energy.max || (is_donator ? 150 : 100)
     };
   }
 
