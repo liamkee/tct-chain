@@ -21,7 +21,31 @@ export type Env = {
   }
 }
 
+import { getCookie } from 'hono/cookie'
+import { verify } from 'hono/jwt'
+
 const app = new Hono<Env>()
+
+// 🚀 WebSocket Auth Gateway
+app.get('/ws', async (c) => {
+  const token = getCookie(c, 'tct_session')
+  if (!token) return c.text('Unauthorized', 401)
+
+  try {
+    const payload = await verify(token, c.env.JWT_SECRET, 'HS256')
+    const id = c.env.CHAIN_MONITOR.idFromName(c.env.FACTION_ID)
+    const stub = c.env.CHAIN_MONITOR.get(id)
+
+    // 转发给 DO 处理 (包含 userId 方便 DO 做定向推送)
+    const url = new URL(c.req.url)
+    url.pathname = '/ws'
+    url.searchParams.set('userId', payload.torn_id as string)
+    
+    return stub.fetch(new Request(url, c.req.raw))
+  } catch (e) {
+    return c.text('Invalid Session', 401)
+  }
+})
 
 app.route('/api', api)
 

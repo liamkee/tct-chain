@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 
 export const members = sqliteTable('Members', {
   torn_id: integer('torn_id').primaryKey(),
@@ -7,4 +7,6 @@ export const members = sqliteTable('Members', {
   discord_id: text('discord_id'),
   is_donator: integer('is_donator').default(0),
   role: text('role').default('member'),
-});
+}, (table) => ({
+  discordIdIdx: index('discord_id_idx').on(table.discord_id),
+}));

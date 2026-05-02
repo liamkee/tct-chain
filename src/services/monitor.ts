@@ -16,10 +16,44 @@ export class ChainMonitor implements DurableObject {
   constructor(state: DurableObjectState, env: Env['Bindings']) {
     this.state = state;
     this.env = env;
+
+    // 🚀 Hibernation Recovery: 从存储恢复关键内存状态
+    this.state.blockConcurrencyWhile(async () => {
+      const stored = await this.state.storage.get<any>([
+        'chain_current', 
+        'chain_timeout', 
+        'micro_logs',
+        'member_status_cache'
+      ]);
+      this.lastChainCurrent = (stored as Map<string, any>).get('chain_current') ?? -1;
+      this.lastChainTimeout = (stored as Map<string, any>).get('chain_timeout') ?? -1;
+      this.microLogs = (stored as Map<string, any>).get('micro_logs') ?? [];
+      
+      const statusMap = (stored as Map<string, any>).get('member_status_cache');
+      if (statusMap) {
+        this.memberStatusCache = new Map(Object.entries(statusMap));
+      }
+    });
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    // 🚀 WebSocket 升级握手 (仅由 Hono 转发而来)
+    if (url.pathname === '/ws') {
+      if (request.headers.get('Upgrade') !== 'websocket') {
+        return new Response('Expected Upgrade: websocket', { status: 426 });
+      }
+
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+
+      // 使用 Hibernation API 接管
+      const userId = url.searchParams.get('userId') || 'anonymous';
+      this.state.acceptWebSocket(server, [userId]);
+
+      return new Response(null, { status: 101, webSocket: client });
+    }
 
     // 暴露状态查询给 Dashboard
     if (url.pathname === '/status') {
@@ -120,6 +154,44 @@ export class ChainMonitor implements DurableObject {
     return new Response('Not Found', { status: 404 });
   }
 
+  // 🚀 Hibernation 强制要求的 Handler
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    try {
+      const data = JSON.parse(message.toString());
+      if (data.type === 'REQ_SNAPSHOT') {
+        const snapshot = await this.getFullSnapshot();
+        ws.send(JSON.stringify({ type: 'SNAPSHOT', data: snapshot }));
+      }
+      if (data.type === 'UPDATE_SQUAD') {
+        await this.state.storage.put('global_selected_members', data.members);
+        this.broadcastToWebSockets({ type: 'SQUAD_UPDATED', members: data.members });
+      }
+    } catch (e) {
+      console.error('[WS] Message parse error', e);
+    }
+  }
+
+  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
+    console.log(`[WS] Closed: ${code} ${reason}`);
+  }
+
+  async webSocketError(ws: WebSocket, error: any): Promise<void> {
+    console.error('[WS] Error:', error);
+  }
+
+  private async getFullSnapshot() {
+    const storage = await this.state.storage.list();
+    const data: Record<string, any> = {};
+    for (const [key, value] of storage.entries()) {
+      data[key] = value;
+    }
+    return {
+      ...data,
+      lastUpdatedAt: this.lastUpdatedAt,
+      microLogs: this.microLogs
+    };
+  }
+
   async alarm(): Promise<void> {
     await this.state.storage.setAlarm(Date.now() + 10000);
     
@@ -133,7 +205,6 @@ export class ChainMonitor implements DurableObject {
       let membersData: any = null;
 
       try {
-        // KV 去重：只在初始化或缓存为空时读取 KV
         if (!this.commanderKeyCache) {
           this.commanderKeyCache = await this.env.TCT_KV.get('COMMANDER_API_KEY') || 'MOCK_KEY';
         }
@@ -143,7 +214,6 @@ export class ChainMonitor implements DurableObject {
         
         const data = await res.json() as any;
         if (data.error) {
-           // 如果 Key 无效，清除缓存以便下次重试
            if (data.error.code === 2) this.commanderKeyCache = null;
            throw new Error(`Torn API Error: ${data.error.error}`);
         }
@@ -158,25 +228,18 @@ export class ChainMonitor implements DurableObject {
         clearTimeout(timeoutId);
       }
 
-      // DO Storage 与 WebSocket 去重逻辑
       let hasChanges = false;
       const storageUpdates: Record<string, any> = {};
 
       if (chainData) {
         const { timeout, current, max } = chainData;
-        // 只有数据发生变化才触发落盘和广播
         if (current !== this.lastChainCurrent || timeout !== this.lastChainTimeout) {
           storageUpdates['chain_timeout'] = timeout;
           storageUpdates['chain_current'] = current;
           storageUpdates['chain_max'] = max;
-          
           this.lastChainCurrent = current;
           this.lastChainTimeout = timeout;
           hasChanges = true;
-          
-          if (timeout > 0 && timeout <= 300) {
-              console.log(`[ALARM] ⚠️ Chain Timeout Critical: ${timeout}s! Triggering Discord Warning...`);
-          }
         }
       }
 
@@ -184,8 +247,6 @@ export class ChainMonitor implements DurableObject {
         for (const [id, member] of Object.entries(membersData) as [string, any][]) {
             const currentStatusStr = `${member.status.state}_${member.last_action.status}`;
             const cachedStatusStr = this.memberStatusCache.get(id);
-            
-            // 只有成员状态改变时才更新
             if (currentStatusStr !== cachedStatusStr) {
               storageUpdates[`member_${id}_status`] = member.status;
               storageUpdates[`member_${id}_last_action`] = member.last_action;
@@ -195,14 +256,13 @@ export class ChainMonitor implements DurableObject {
         }
       }
 
-      // 纯内存更新心跳，去重磁盘写入 (每10秒写盘极易爆费)
       this.lastUpdatedAt = Date.now();
       
       if (hasChanges) {
         await this.state.storage.put(storageUpdates);
+        await this.state.storage.put('member_status_cache', Object.fromEntries(this.memberStatusCache));
       }
 
-      // 🚀 批量落盘：将 Consumer 攒下的内存 buffer 统一写入磁盘
       if (this.memberBuffer.size > 0) {
         const batchUpdates: Record<string, any> = {};
         for (const [id, updates] of this.memberBuffer.entries()) {
@@ -211,29 +271,28 @@ export class ChainMonitor implements DurableObject {
           }
         }
         await this.state.storage.put(batchUpdates);
-        this.memberBuffer.clear(); // 清空 buffer
-        console.log(`[ChainMonitor] Flushed ${Object.keys(batchUpdates).length} updates to storage.`);
+        this.memberBuffer.clear();
       }
+
+      await this.state.storage.put('micro_logs', this.microLogs);
+      await this.state.storage.put('chain_current', this.lastChainCurrent);
+      await this.state.storage.put('chain_timeout', this.lastChainTimeout);
       
       const chainTimeout = chainData?.timeout ?? (await this.state.storage.get<number>('chain_timeout')) ?? 0;
 
       if (switchState === 'OFF') {
         if (chainTimeout === 0) {
-          console.log('[ChainMonitor] Switch OFF & Chain Dead. Sleeping...');
           await this.state.storage.deleteAlarm();
           return;
         }
       } else {
         if (chainTimeout === 0) {
-          console.log('[ChainMonitor] Chain Dead but Switch ON. Low-freq polling (60s)...');
           await this.state.storage.setAlarm(Date.now() + 60000);
         } else if (hasChanges) {
-          // 只在有真实变化时才广播，避免前端被无用 Socket 消息淹没
           this.broadcastToWebSockets({ type: 'CHAIN_UPDATE', data: storageUpdates });
         }
       }
 
-      // 永远推送心跳包，用于前端的 Stale Data Policy 检测
       this.broadcastToWebSockets({ type: 'HEARTBEAT', lastUpdatedAt: this.lastUpdatedAt, microLogs: this.microLogs });
 
     } catch (err: any) {
@@ -244,7 +303,12 @@ export class ChainMonitor implements DurableObject {
   }
 
   private broadcastToWebSockets(payload: any) {
-    // console.log('[WebSocket] Broadcasting payload:', payload.type);
+    const websockets = this.state.getWebSockets();
+    const message = JSON.stringify(payload);
+    websockets.forEach(ws => {
+      try {
+        ws.send(message);
+      } catch (e) {}
+    });
   }
 }
-
