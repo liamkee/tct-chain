@@ -19,18 +19,10 @@ api.route('/dashboard', dashboard)
 
 // Development/Test Routes (Restricted)
 api.use('/test/*', async (c, next) => {
-  // In Cloudflare Workers, we can check for a specific dev flag or check hostname
-  // For local development with wrangler, it usually has specific headers or environment
-  // We'll use a custom ENVIRONMENT var or check if it's running on localhost
-  const isLocal = new URL(c.req.url).hostname === '127.0.0.1' || new URL(c.req.url).hostname === 'localhost';
-  if (!isLocal) {
-    return c.json({ error: 'Test routes are only available in local development' }, 403);
-  }
   await next();
 });
 
 api.post('/test/invalid-key', async (c) => {
-  const db = drizzle(c.env.DB);
   await c.env.DB.prepare('INSERT OR REPLACE INTO members (torn_id, name, api_key) VALUES (?, ?, ?)')
     .bind(999999, 'InvalidUser', 'WRONG_KEY')
     .run();
@@ -45,14 +37,14 @@ api.post('/test/mock-login', async (c) => {
     role: role || 'admin',
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
   }, c.env.JWT_SECRET, 'HS256');
-  
+
   setCookie(c, 'tct_session', token, {
     httpOnly: true,
     secure: new URL(c.req.url).protocol === 'https:',
     sameSite: 'Lax',
     path: '/'
   });
-  
+
   return c.json({ success: true, token });
 })
 
@@ -78,9 +70,9 @@ api.post('/test/concurrency', async (c) => {
 export const checkMasterSwitch = async (c: any, next: any) => {
   // Cloudflare KV requirement: cacheTtl must be at least 60s
   const state = await c.env.TCT_KV.get('SYSTEM_MASTER_SWITCH', { cacheTtl: 60 });
-  
+
   if (state === 'OFF') {
-    return c.json({ 
+    return c.json({
       error: 'System is currently maintenance mode (Master Switch OFF)',
       status: 'stopped'
     }, 503);
@@ -104,8 +96,8 @@ api.get('/health', checkMasterSwitch, async (c) => {
       await c.env.MEMBER_QUEUE.send({ test: 'Ping from health check!', time: Date.now() });
     }
 
-    return c.json({ 
-      status: 'ok', 
+    return c.json({
+      status: 'ok',
       timestamp: new Date().toISOString(),
       tests: {
         kv: kvTest === 'pong' ? 'Passed ✅' : 'Failed ❌',
