@@ -12,7 +12,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply tct-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply tct-db --remote",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "engine:start": "curl -s -X POST http://127.0.0.1:8787/api/test/mock-login -H \"Content-Type: application/json\" -d '{\"role\":\"admin\"}' -c cookies.txt > /dev/null && curl -s http://127.0.0.1:8787/api/dashboard/start -b cookies.txt",
+    "engine:stop": "curl -s http://127.0.0.1:8787/api/dashboard/stop -b cookies.txt"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.4",

@@ -1,5 +1,6 @@
 import type { Env } from '../index'
 import { ApiManager } from '../services/api_manager'
+import { SecurityService } from '../services/security'
 
 export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): Promise<void> {
   const switchState = await env.TCT_KV.get('SYSTEM_MASTER_SWITCH');
@@ -11,6 +12,7 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
   const apiManager = new ApiManager(env);
   const id = env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR');
   const monitor = env.CHAIN_MONITOR.get(id);
+  const security = new SecurityService(env.ENCRYPTION_SECRET);
 
   const keysCount: Record<string, number> = {};
   for (const msg of batch.messages) {
@@ -70,26 +72,33 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
        return;
     }
 
+    let rawApiKey = apiKey;
+    if (apiKey && apiKey.includes(':')) {
+       const decrypted = await security.decrypt(apiKey);
+       if (decrypted) rawApiKey = decrypted;
+    }
+
     let selections = 'bars,cooldowns,icons,basic,refills';
 
     try {
-      const res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${apiKey}`);
+      const res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${rawApiKey}`);
       
       const data = await res.json() as any;
       console.log(`[Queue] Raw data for ${tornId}: Energy=${data.energy?.current}, Refill=${data.refills?.energy}`);
       
       if (data.error) {
          apiManager.logAnalytics('api_error', tornId, data.error.error);
-         if (data.error.code === 2) {
-             console.log(`[Queue] ⚠️ Key invalid for ${tornId}.`);
-             await env.DB.prepare('UPDATE members SET api_key = NULL WHERE torn_id = ?').bind(tornId).run();
-             return;
-         }
+         // 🚀 生产环境开启，开发环境禁用：防止误删 Key
+         // if (data.error.code === 2) {
+         //    console.log(`[Queue] ⚠️ Key invalid for ${tornId}.`);
+         //    await env.DB.prepare('UPDATE members SET api_key = NULL WHERE torn_id = ?').bind(tornId).run();
+         //    return;
+         // }
          throw new Error(`Torn Error: ${data.error.error}`);
       }
 
       updatesBatch.push({
-         id: tornId,
+         id: tornId.toString(),
          updates: {
             energy: data.energy?.current,
             energy_max: data.energy?.maximum,

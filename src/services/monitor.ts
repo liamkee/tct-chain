@@ -156,9 +156,12 @@ export class ChainMonitor implements DurableObject {
                 storageUpdates[`member_${item.id}_${field}`] = value;
              }
              // 实时广播给所有前端 Dashboard
+             const stringId = item.id.toString();
+             console.log(`[DO] Receiving tactical update for member ${stringId}: Energy=${item.updates.energy}`);
+             
              this.broadcastToWebSockets({ 
                type: 'MEMBER_SOFT_UPDATE', 
-               id: item.id, 
+               id: stringId, 
                data: item.updates 
              });
           }
@@ -251,6 +254,7 @@ export class ChainMonitor implements DurableObject {
 
     if (url.pathname === '/internal/stop') {
        await this.state.storage.put('master_switch', 'OFF');
+       await this.env.TCT_KV.put('SYSTEM_MASTER_SWITCH', 'OFF');
        console.log('[DO] Master Switch turned OFF. Stopping alarm...');
        return new Response('System Stopped');
     }
@@ -258,6 +262,7 @@ export class ChainMonitor implements DurableObject {
     if (url.pathname === '/internal/start') {
        await this.state.storage.setAlarm(Date.now() + 100);
        await this.state.storage.put('master_switch', 'ON');
+       await this.env.TCT_KV.put('SYSTEM_MASTER_SWITCH', 'ON');
        console.log('[DO] Alarm manually triggered and started.');
        return new Response('System Started');
     }
