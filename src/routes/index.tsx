@@ -20,14 +20,13 @@ function Index() {
   const trend = useDashboardStore((state) => state.trend);
   const eta = useDashboardStore((state) => state.eta);
   const tacticalAggregate = useDashboardStore((state) => state.tacticalAggregate);
-
-  // 🚀 本地平滑倒计时状态
+  const serverClockOffset = useDashboardStore((state) => state.serverClockOffset);
   const [localTimeout, setLocalTimeout] = useState(chain.timeout);
   const requestRef = useRef<number>(0);
 
   useEffect(() => {
     const animate = () => {
-      const now = Date.now();
+      const now = Date.now() + serverClockOffset;
       const diff = Math.max(0, (chain.deadline - now) / 1000);
       setLocalTimeout(diff);
       requestRef.current = requestAnimationFrame(animate);

@@ -32,7 +32,8 @@ export class ChainMonitor implements DurableObject {
         'hpm_history',
         'last_rtt',
         'manual_offset',
-        'interval_counter'
+        'interval_counter',
+        'chain_deadline_ms'
       ]);
       
       // Durable Object storage get() returns a Map when requesting multiple keys
@@ -175,7 +176,7 @@ export class ChainMonitor implements DurableObject {
              this.microLogs.push({ ts: Date.now(), msg });
           }
           while (this.microLogs.length > 20) this.microLogs.shift();
-          this.broadcastToWebSockets({ type: 'LOG_UPDATE', microLogs: this.microLogs });
+          this.broadcastToWebSockets({ type: 'LOG_UPDATE', microLogs: this.microLogs, do_server_time_ms: Date.now() });
           return new Response('OK');
        }
     }
@@ -230,8 +231,10 @@ export class ChainMonitor implements DurableObject {
          microLogs: logs,
          chain_current: await this.state.storage.get('chain_current') || 0,
          chain_timeout: await this.state.storage.get('chain_timeout') || 0,
+         chain_deadline_ms: await this.state.storage.get('chain_deadline_ms') || 0,
          chain_max: await this.state.storage.get('chain_max') || 10,
-         lastUpdatedAt: this.lastUpdatedAt
+         lastUpdatedAt: this.lastUpdatedAt,
+         do_server_time_ms: Date.now()
        }), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -382,6 +385,7 @@ export class ChainMonitor implements DurableObject {
           }
 
           storageUpdates['chain_timeout'] = adjustedTimeout; // 存入修正后的值
+          storageUpdates['chain_deadline_ms'] = Math.floor(Date.now() - (this.lastRTT / 2) + (timeout * 1000) + this.manualOffset);
           storageUpdates['chain_current'] = current;
           storageUpdates['chain_max'] = max;
           this.lastChainCurrent = current;
@@ -444,7 +448,8 @@ export class ChainMonitor implements DurableObject {
             this.broadcastToWebSockets({
               type: 'MEMBER_SOFT_UPDATE',
               id,
-              data // 🚀 已经是 data 了，保持一致
+              data, // 🚀 已经是 data 了，保持一致
+              do_server_time_ms: Date.now()
             });
           }
         }
@@ -579,6 +584,7 @@ export class ChainMonitor implements DurableObject {
       this.broadcastToWebSockets({ 
         type: 'HEARTBEAT', 
         lastUpdatedAt: this.lastUpdatedAt, 
+        do_server_time_ms: Date.now(),
         microLogs: this.microLogs,
         hpm: currentHPM,
         recentHPM,
