@@ -42,6 +42,9 @@ new_sqlite_classes = ["ChainMonitor"]
 
 [vars]
 FACTION_ID = "53822"
+# Discord Setup
+DISCORD_PUBLIC_KEY = ""
+ALERTS_WEBHOOK_URL = ""
 
 [triggers]
 crons = ["*/1 * * * *"]

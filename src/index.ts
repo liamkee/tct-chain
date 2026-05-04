@@ -18,7 +18,12 @@ export type Env = {
     DISCORD_CLIENT_ID: string;
     DISCORD_CLIENT_SECRET: string;
     FACTION_ID: string;
+    DISCORD_PUBLIC_KEY: string;
+    ALERTS_WEBHOOK_URL: string;
     ANALYTICS?: AnalyticsEngineDataset;
+  },
+  Variables: {
+    parsedBody: any;
   }
 }
 

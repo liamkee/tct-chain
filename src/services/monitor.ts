@@ -1,5 +1,6 @@
 import type { Env } from '../index'
 import { TacticalCalculator } from './calculator'
+import { DiscordWebhookService } from './discord_webhook'
 
 export class ChainMonitor implements DurableObject {
   private state: DurableObjectState;
@@ -16,6 +17,7 @@ export class ChainMonitor implements DurableObject {
   private lastRTT: number = 0; // 最近一次 API 往返延迟 (ms)
   private manualOffset: number = 0; // 指挥官手动微调 (ms)
   public lastUpdatedAt: number = 0; // 纯内存心跳
+  private lastEmergencyAlertTs: number = 0; // Discord 防骚扰限流 (内存态)
 
   constructor(state: DurableObjectState, env: Env['Bindings']) {
     this.state = state;
@@ -236,6 +238,7 @@ export class ChainMonitor implements DurableObject {
          chain_timeout: await this.state.storage.get('chain_timeout') || 0,
          chain_deadline_ms: await this.state.storage.get('chain_deadline_ms') || 0,
          chain_max: await this.state.storage.get('chain_max') || 10,
+         current_hpm: this.hpmHistory.length > 0 ? (this.hpmHistory.reduce((a, b) => a + b, 0) / this.hpmHistory.length) * 6 : 0,
          lastUpdatedAt: this.lastUpdatedAt,
          do_server_time_ms: Date.now()
        }), { headers: { 'Content-Type': 'application/json' } });
@@ -373,6 +376,8 @@ export class ChainMonitor implements DurableObject {
 
       let hasChanges = false;
       const storageUpdates: Record<string, any> = {};
+      let currentHPM = 0;
+      let recentHPM = 0;
 
       if (chainData) {
         const { timeout, current, max } = chainData;
@@ -380,6 +385,21 @@ export class ChainMonitor implements DurableObject {
         // 🚀 最终倒计时合成公式
         // adjustedTimeout = API返回的秒数 - (单程延迟/1000) + (手动微调/1000)
         const adjustedTimeout = Math.max(0, timeout - (this.lastRTT / 2 / 1000) + (this.manualOffset / 1000));
+        
+        // 🚀 计算 HPM (Move up for alerts)
+        if (this.hpmHistory.length >= 6) {
+          const last6 = this.hpmHistory.slice(-6);
+          recentHPM = last6.reduce((a, b) => a + b, 0);
+        }
+        if (this.hpmHistory.length > 10) {
+          const sorted = [...this.hpmHistory].sort((a, b) => a - b);
+          const trimmed = sorted.slice(2, -2);
+          const sum = trimmed.reduce((a, b) => a + b, 0);
+          currentHPM = (sum / trimmed.length) * 6;
+        } else {
+          const sum = this.hpmHistory.reduce((a, b) => a + b, 0);
+          currentHPM = (sum / (this.hpmHistory.length || 1)) * 6;
+        }
 
         if (current !== this.lastChainCurrent || timeout !== this.lastChainTimeout) {
           // ... (HPM 逻辑保持不变)
@@ -400,8 +420,27 @@ export class ChainMonitor implements DurableObject {
           // 🚀 风险警报检测 (Risk Management)
           if (adjustedTimeout <= 0) {
             this.dispatchAlert(`FATAL: Chain broken or near zero! 0s remaining.`);
-          } else if (adjustedTimeout < 60) {
+          } else if (adjustedTimeout < 90) {
             this.dispatchAlert(`CRITICAL: Chain at risk! ${Math.floor(adjustedTimeout)}s remaining.`);
+            
+            // 🚀 Discord 紧急告警 (1分钟去重)
+            const now = Date.now();
+            if (now - this.lastEmergencyAlertTs > 60000) {
+               const discord = new DiscordWebhookService(this.env);
+               // 可以从配置中获取 ROLE_ID，暂时留空
+               discord.sendEmergencyAlert(adjustedTimeout).catch(console.error);
+               this.lastEmergencyAlertTs = now;
+            }
+          }
+
+          // 🚀 里程碑检测 (Milestones)
+          const milestones = [1000, 2500, 5000, 10000, 25000];
+          for (const m of milestones) {
+             if (this.lastChainCurrent < m && current >= m) {
+                this.dispatchAlert(`MILESTONE: Chain hit ${m}!`);
+                const discord = new DiscordWebhookService(this.env);
+                discord.sendMilestone(current, currentHPM || 0).catch(console.error);
+             }
           }
         } else {
            this.hpmHistory.push(0);
@@ -543,25 +582,6 @@ export class ChainMonitor implements DurableObject {
       await this.state.storage.put('last_rtt', this.lastRTT);
       
 
-
-      // 🚀 计算 HPM (Trimmed Mean 剔除异常值)
-      let currentHPM = 0;
-      let recentHPM = 0; // 最近 1 分钟的 HPM
-
-      if (this.hpmHistory.length >= 6) {
-        const last6 = this.hpmHistory.slice(-6);
-        recentHPM = last6.reduce((a, b) => a + b, 0); // 6个10秒点即为1分钟总计
-      }
-
-      if (this.hpmHistory.length > 10) {
-        const sorted = [...this.hpmHistory].sort((a, b) => a - b);
-        const trimmed = sorted.slice(2, -2);
-        const sum = trimmed.reduce((a, b) => a + b, 0);
-        currentHPM = (sum / trimmed.length) * 6; 
-      } else {
-        const sum = this.hpmHistory.reduce((a, b) => a + b, 0);
-        currentHPM = (sum / (this.hpmHistory.length || 1)) * 6;
-      }
 
       const chainMax = await this.state.storage.get<number>('chain_max') || 10;
       const remainingHits = Math.max(0, chainMax - this.lastChainCurrent);
