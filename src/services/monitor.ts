@@ -144,6 +144,42 @@ export class ChainMonitor implements DurableObject {
       });
     }
 
+    // 🚀 批量数据写入接口 (Consumer 调用，极大减少 DO Request 数量)
+    if (url.pathname === '/internal/update-members-batch') {
+       if (request.method === 'POST') {
+          const items = await request.json() as any[];
+          const storageUpdates: Record<string, any> = {};
+          
+          for (const item of items) {
+             for (const [field, value] of Object.entries(item.updates)) {
+                storageUpdates[`member_${item.id}_${field}`] = value;
+             }
+             // 实时广播给所有前端 Dashboard
+             this.broadcastToWebSockets({ 
+               type: 'MEMBER_SOFT_UPDATE', 
+               id: item.id, 
+               data: item.updates 
+             });
+          }
+          
+          await this.state.storage.put(storageUpdates);
+          return new Response('OK');
+       }
+    }
+
+    // 🚀 批量日志接口
+    if (url.pathname === '/internal/log-batch') {
+       if (request.method === 'POST') {
+          const { msgs } = await request.json() as { msgs: string[] };
+          for (const msg of msgs) {
+             this.microLogs.push({ ts: Date.now(), msg });
+          }
+          while (this.microLogs.length > 20) this.microLogs.shift();
+          this.broadcastToWebSockets({ type: 'LOG_UPDATE', microLogs: this.microLogs });
+          return new Response('OK');
+       }
+    }
+
     // 内部数据写入接口 (Consumer 调用，写入抓取到的高频战术数据)
     if (url.pathname === '/internal/update-member') {
        if (request.method === 'POST') {

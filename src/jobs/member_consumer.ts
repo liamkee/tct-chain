@@ -28,6 +28,9 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
      }
   }
 
+  const updatesBatch: any[] = [];
+  const logBatch: string[] = [];
+
   await Promise.allSettled(batch.messages.map(async (message) => {
     const { tornId, apiKey, ts, test } = message.body;
     
@@ -46,16 +49,15 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
     }
 
     // 🚀 核心防护：旧请求消除逻辑 (Old Request Elimination)
-    // 如果消息在队列中积压超过 60 秒，说明 Producer 已经发出了更鲜活的数据，旧的直接丢弃。
     if (ts && Date.now() - ts > 60000) {
        console.log(`[Queue] Dropping stale message for ${tornId} (Age: ${Math.round((Date.now() - ts)/1000)}s)`);
-       message.ack(); // 标记成功但不再处理
+       message.ack();
        return;
     }
 
     if (!keyTokens[apiKey]) {
        apiManager.logAnalytics('rate_limit_block', tornId);
-       await monitor.fetch('http://do/internal/log', { method: 'POST', body: JSON.stringify({ msg: `[LIMIT] Rate limit hit for ${tornId}. Re-queuing...` }) });
+       logBatch.push(`[LIMIT] Rate limit hit for ${tornId}. Re-queuing...`);
        message.retry();
        return;
     }
@@ -63,20 +65,17 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
     if (message.attempts > 3) {
        console.log(`[Queue] ⚠️ Poison message for ${tornId}. Max retries exceeded. Marking key invalid.`);
        apiManager.logAnalytics('poison_message', tornId);
-       await monitor.fetch('http://do/internal/log', { method: 'POST', body: JSON.stringify({ msg: `[ALERT] Member ${tornId} failed multiple times. Key marked invalid.` }) });
+       logBatch.push(`[ALERT] Member ${tornId} failed multiple times. Key marked invalid.`);
        await env.DB.prepare('UPDATE members SET api_key = NULL WHERE torn_id = ?').bind(tornId).run();
        return;
     }
 
-    // 使用 bars 获取 Energy, cooldowns 获取 CD, icons 用于检测 Refill 是否可用, basic 获取状态
-    // 🚀 升级：加入 refills 接口，获取更精确的补给数据
     let selections = 'bars,cooldowns,icons,basic,refills';
 
     try {
       const res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${apiKey}`);
       
       const data = await res.json() as any;
-      // 🚀 修正：Torn API 的 bars 数据通常直接平铺在根部
       console.log(`[Queue] Raw data for ${tornId}: Energy=${data.energy?.current}, Refill=${data.refills?.energy}`);
       
       if (data.error) {
@@ -89,32 +88,43 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
          throw new Error(`Torn Error: ${data.error.error}`);
       }
 
-      const updateRes = await monitor.fetch('http://do/internal/update-member', {
-         method: 'POST',
-         body: JSON.stringify({
-            id: tornId,
-            updates: {
-               energy: data.energy?.current,
-               energy_max: data.energy?.maximum,
-               cooldowns: data.cooldowns,
-               status: data.status,
-               last_action: data.last_action,
-               // 显式逻辑：如果 energy 是 false，才代表 USED
-               refill_used: data.refills ? data.refills.energy === false : !data.icons?.icon70,
-               last_updated: Math.floor(Date.now() / 1000)
-            }
-         })
+      updatesBatch.push({
+         id: tornId,
+         updates: {
+            energy: data.energy?.current,
+            energy_max: data.energy?.maximum,
+            cooldowns: data.cooldowns,
+            status: data.status,
+            last_action: data.last_action,
+            refill_used: data.refills ? data.refills.energy === false : !data.icons?.icon70,
+            last_updated: Math.floor(Date.now() / 1000)
+         }
       });
 
-      if (!updateRes.ok) {
-        const errText = await updateRes.text();
-        console.error(`[Queue] DO Update Failed for ${tornId}: ${updateRes.status} ${errText}`);
-      } else {
-        console.log(`[Queue] Successfully pushed updates for ${tornId} to DO.`);
-      }
     } catch (err: any) {
       console.error(`[Queue] Critical Error processing ${tornId}:`, err);
       message.retry();
     }
   }));
+
+  // 🚀 发送批量更新到 DO (极大地节省 Request 数量)
+  if (updatesBatch.length > 0) {
+     const updateRes = await monitor.fetch('http://do/internal/update-members-batch', {
+        method: 'POST',
+        body: JSON.stringify(updatesBatch)
+     });
+     if (updateRes.ok) {
+        console.log(`[Queue] Successfully pushed ${updatesBatch.length} updates to DO.`);
+     } else {
+        console.error(`[Queue] Batch DO Update Failed: ${updateRes.status}`);
+     }
+  }
+
+  // 🚀 发送批量日志
+  if (logBatch.length > 0) {
+     await monitor.fetch('http://do/internal/log-batch', {
+        method: 'POST',
+        body: JSON.stringify({ msgs: logBatch })
+     });
+  }
 }
