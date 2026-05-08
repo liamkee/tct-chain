@@ -1,5 +1,6 @@
 import type { Env } from '../index'
 import { TacticalCalculator } from './calculator'
+import { DiscordWebhookService } from './discord_webhook'
 
 export class ChainMonitor implements DurableObject {
   private state: DurableObjectState;
@@ -16,6 +17,7 @@ export class ChainMonitor implements DurableObject {
   private lastRTT: number = 0; // 最近一次 API 往返延迟 (ms)
   private manualOffset: number = 0; // 指挥官手动微调 (ms)
   public lastUpdatedAt: number = 0; // 纯内存心跳
+  private lastEmergencyAlertTs: number = 0; // Discord 防骚扰限流 (内存态)
 
   constructor(state: DurableObjectState, env: Env['Bindings']) {
     this.state = state;
@@ -32,7 +34,8 @@ export class ChainMonitor implements DurableObject {
         'hpm_history',
         'last_rtt',
         'manual_offset',
-        'interval_counter'
+        'interval_counter',
+        'chain_deadline_ms'
       ]);
       
       // Durable Object storage get() returns a Map when requesting multiple keys
@@ -144,6 +147,45 @@ export class ChainMonitor implements DurableObject {
       });
     }
 
+    // 🚀 批量数据写入接口 (Consumer 调用，极大减少 DO Request 数量)
+    if (url.pathname === '/internal/update-members-batch') {
+       if (request.method === 'POST') {
+          const items = await request.json() as any[];
+          const storageUpdates: Record<string, any> = {};
+          
+          for (const item of items) {
+             for (const [field, value] of Object.entries(item.updates)) {
+                storageUpdates[`member_${item.id}_${field}`] = value;
+             }
+             // 实时广播给所有前端 Dashboard
+             const stringId = item.id.toString();
+             console.log(`[DO] Receiving tactical update for member ${stringId}: Energy=${item.updates.energy}`);
+             
+             this.broadcastToWebSockets({ 
+               type: 'MEMBER_SOFT_UPDATE', 
+               id: stringId, 
+               data: item.updates 
+             });
+          }
+          
+          await this.state.storage.put(storageUpdates);
+          return new Response('OK');
+       }
+    }
+
+    // 🚀 批量日志接口
+    if (url.pathname === '/internal/log-batch') {
+       if (request.method === 'POST') {
+          const { msgs } = await request.json() as { msgs: string[] };
+          for (const msg of msgs) {
+             this.microLogs.push({ ts: Date.now(), msg });
+          }
+          while (this.microLogs.length > 20) this.microLogs.shift();
+          this.broadcastToWebSockets({ type: 'LOG_UPDATE', microLogs: this.microLogs, do_server_time_ms: Date.now() });
+          return new Response('OK');
+       }
+    }
+
     // 内部数据写入接口 (Consumer 调用，写入抓取到的高频战术数据)
     if (url.pathname === '/internal/update-member') {
        if (request.method === 'POST') {
@@ -194,8 +236,11 @@ export class ChainMonitor implements DurableObject {
          microLogs: logs,
          chain_current: await this.state.storage.get('chain_current') || 0,
          chain_timeout: await this.state.storage.get('chain_timeout') || 0,
+         chain_deadline_ms: await this.state.storage.get('chain_deadline_ms') || 0,
          chain_max: await this.state.storage.get('chain_max') || 10,
-         lastUpdatedAt: this.lastUpdatedAt
+         current_hpm: this.hpmHistory.length > 0 ? (this.hpmHistory.reduce((a, b) => a + b, 0) / this.hpmHistory.length) * 6 : 0,
+         lastUpdatedAt: this.lastUpdatedAt,
+         do_server_time_ms: Date.now()
        }), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -212,6 +257,7 @@ export class ChainMonitor implements DurableObject {
 
     if (url.pathname === '/internal/stop') {
        await this.state.storage.put('master_switch', 'OFF');
+       await this.env.TCT_KV.put('SYSTEM_MASTER_SWITCH', 'OFF');
        console.log('[DO] Master Switch turned OFF. Stopping alarm...');
        return new Response('System Stopped');
     }
@@ -219,6 +265,7 @@ export class ChainMonitor implements DurableObject {
     if (url.pathname === '/internal/start') {
        await this.state.storage.setAlarm(Date.now() + 100);
        await this.state.storage.put('master_switch', 'ON');
+       await this.env.TCT_KV.put('SYSTEM_MASTER_SWITCH', 'ON');
        console.log('[DO] Alarm manually triggered and started.');
        return new Response('System Started');
     }
@@ -329,6 +376,8 @@ export class ChainMonitor implements DurableObject {
 
       let hasChanges = false;
       const storageUpdates: Record<string, any> = {};
+      let currentHPM = 0;
+      let recentHPM = 0;
 
       if (chainData) {
         const { timeout, current, max } = chainData;
@@ -336,6 +385,21 @@ export class ChainMonitor implements DurableObject {
         // 🚀 最终倒计时合成公式
         // adjustedTimeout = API返回的秒数 - (单程延迟/1000) + (手动微调/1000)
         const adjustedTimeout = Math.max(0, timeout - (this.lastRTT / 2 / 1000) + (this.manualOffset / 1000));
+        
+        // 🚀 计算 HPM (Move up for alerts)
+        if (this.hpmHistory.length >= 6) {
+          const last6 = this.hpmHistory.slice(-6);
+          recentHPM = last6.reduce((a, b) => a + b, 0);
+        }
+        if (this.hpmHistory.length > 10) {
+          const sorted = [...this.hpmHistory].sort((a, b) => a - b);
+          const trimmed = sorted.slice(2, -2);
+          const sum = trimmed.reduce((a, b) => a + b, 0);
+          currentHPM = (sum / trimmed.length) * 6;
+        } else {
+          const sum = this.hpmHistory.reduce((a, b) => a + b, 0);
+          currentHPM = (sum / (this.hpmHistory.length || 1)) * 6;
+        }
 
         if (current !== this.lastChainCurrent || timeout !== this.lastChainTimeout) {
           // ... (HPM 逻辑保持不变)
@@ -346,6 +410,7 @@ export class ChainMonitor implements DurableObject {
           }
 
           storageUpdates['chain_timeout'] = adjustedTimeout; // 存入修正后的值
+          storageUpdates['chain_deadline_ms'] = Math.floor(Date.now() - (this.lastRTT / 2) + (timeout * 1000) + this.manualOffset);
           storageUpdates['chain_current'] = current;
           storageUpdates['chain_max'] = max;
           this.lastChainCurrent = current;
@@ -355,8 +420,27 @@ export class ChainMonitor implements DurableObject {
           // 🚀 风险警报检测 (Risk Management)
           if (adjustedTimeout <= 0) {
             this.dispatchAlert(`FATAL: Chain broken or near zero! 0s remaining.`);
-          } else if (adjustedTimeout < 60) {
+          } else if (adjustedTimeout < 90) {
             this.dispatchAlert(`CRITICAL: Chain at risk! ${Math.floor(adjustedTimeout)}s remaining.`);
+            
+            // 🚀 Discord 紧急告警 (1分钟去重)
+            const now = Date.now();
+            if (now - this.lastEmergencyAlertTs > 60000) {
+               const discord = new DiscordWebhookService(this.env);
+               // 可以从配置中获取 ROLE_ID，暂时留空
+               discord.sendEmergencyAlert(adjustedTimeout).catch(console.error);
+               this.lastEmergencyAlertTs = now;
+            }
+          }
+
+          // 🚀 里程碑检测 (Milestones)
+          const milestones = [1000, 2500, 5000, 10000, 25000];
+          for (const m of milestones) {
+             if (this.lastChainCurrent < m && current >= m) {
+                this.dispatchAlert(`MILESTONE: Chain hit ${m}!`);
+                const discord = new DiscordWebhookService(this.env);
+                discord.sendMilestone(current, currentHPM || 0).catch(console.error);
+             }
           }
         } else {
            this.hpmHistory.push(0);
@@ -408,7 +492,8 @@ export class ChainMonitor implements DurableObject {
             this.broadcastToWebSockets({
               type: 'MEMBER_SOFT_UPDATE',
               id,
-              data // 🚀 已经是 data 了，保持一致
+              data, // 🚀 已经是 data 了，保持一致
+              do_server_time_ms: Date.now()
             });
           }
         }
@@ -498,25 +583,6 @@ export class ChainMonitor implements DurableObject {
       
 
 
-      // 🚀 计算 HPM (Trimmed Mean 剔除异常值)
-      let currentHPM = 0;
-      let recentHPM = 0; // 最近 1 分钟的 HPM
-
-      if (this.hpmHistory.length >= 6) {
-        const last6 = this.hpmHistory.slice(-6);
-        recentHPM = last6.reduce((a, b) => a + b, 0); // 6个10秒点即为1分钟总计
-      }
-
-      if (this.hpmHistory.length > 10) {
-        const sorted = [...this.hpmHistory].sort((a, b) => a - b);
-        const trimmed = sorted.slice(2, -2);
-        const sum = trimmed.reduce((a, b) => a + b, 0);
-        currentHPM = (sum / trimmed.length) * 6; 
-      } else {
-        const sum = this.hpmHistory.reduce((a, b) => a + b, 0);
-        currentHPM = (sum / (this.hpmHistory.length || 1)) * 6;
-      }
-
       const chainMax = await this.state.storage.get<number>('chain_max') || 10;
       const remainingHits = Math.max(0, chainMax - this.lastChainCurrent);
       const etaMinutes = currentHPM > 0 ? remainingHits / currentHPM : -1;
@@ -543,6 +609,7 @@ export class ChainMonitor implements DurableObject {
       this.broadcastToWebSockets({ 
         type: 'HEARTBEAT', 
         lastUpdatedAt: this.lastUpdatedAt, 
+        do_server_time_ms: Date.now(),
         microLogs: this.microLogs,
         hpm: currentHPM,
         recentHPM,

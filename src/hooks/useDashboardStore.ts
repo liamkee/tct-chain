@@ -26,6 +26,7 @@ interface DashboardState {
   globalSelectedMembers: string[];
   microLogs: Array<{ ts: number, msg: string }>;
   lastUpdatedAt: number;
+  serverClockOffset: number; // DO Time - Local Time
   
   // Phase 3 推演数据
   hpm: number;
@@ -66,6 +67,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   globalSelectedMembers: [],
   microLogs: [],
   lastUpdatedAt: 0,
+  serverClockOffset: 0,
   hpm: 0,
   recentHPM: 0,
   trend: 'STABLE',
@@ -83,10 +85,13 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     const data = payload.data || payload; 
     const members: Record<string, any> = {};
     const logs = data.microLogs || data.micro_logs || [];
+    const doTime = data.do_server_time_ms || Date.now();
+    const offset = doTime - Date.now();
+
     const chain = {
       current: data.chain_current || data.status?.chainCurrent || 0,
       timeout: data.chain_timeout || data.status?.chainTimeout || 0,
-      deadline: Date.now() + (data.chain_timeout || data.status?.chainTimeout || 0) * 1000,
+      deadline: data.chain_deadline_ms || (Date.now() + offset + (data.chain_timeout || data.status?.chainTimeout || 0) * 1000),
       max: data.chain_max || 10,
       target: data.chain_target || 0
     };
@@ -114,7 +119,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       chain, 
       microLogs: logs,
       globalSelectedMembers: data.global_selected_members || [],
-      lastUpdatedAt: data.lastUpdatedAt || Date.now()
+      lastUpdatedAt: data.lastUpdatedAt || Date.now(),
+      serverClockOffset: offset
     });
   },
 
@@ -125,13 +131,20 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     }
   })),
 
-  updateChain: (updates) => set((state) => ({
-    chain: { 
-      ...state.chain, 
-      ...updates,
-      deadline: updates.timeout !== undefined ? Date.now() + updates.timeout * 1000 : state.chain.deadline
-    }
-  })),
+  updateChain: (updates) => set((state) => {
+    const doTime = updates.do_server_time_ms || Date.now();
+    const offset = updates.do_server_time_ms ? doTime - Date.now() : state.serverClockOffset;
+    
+    return {
+      chain: { 
+        ...state.chain, 
+        ...updates,
+        deadline: updates.chain_deadline_ms || 
+                  (updates.timeout !== undefined ? Date.now() + offset + updates.timeout * 1000 : state.chain.deadline)
+      },
+      serverClockOffset: offset
+    };
+  }),
 
   setSquad: (members) => set({ globalSelectedMembers: members }),
   
@@ -150,13 +163,19 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     return { microLogs: newLogs };
   }),
 
-  setHeartbeat: (payload) => set((state) => ({
-    lastUpdatedAt: payload.lastUpdatedAt,
-    hpm: payload.hpm,
-    recentHPM: payload.recentHPM,
-    trend: payload.trend,
-    eta: payload.eta,
-    tacticalAggregate: payload.aggregate || state.tacticalAggregate,
-    microLogs: payload.microLogs || state.microLogs
-  }))
+  setHeartbeat: (payload) => set((state) => {
+    const doTime = payload.do_server_time_ms || Date.now();
+    const offset = payload.do_server_time_ms ? doTime - Date.now() : state.serverClockOffset;
+    
+    return {
+      lastUpdatedAt: payload.lastUpdatedAt,
+      hpm: payload.hpm,
+      recentHPM: payload.recentHPM,
+      trend: payload.trend,
+      eta: payload.eta,
+      tacticalAggregate: payload.aggregate || state.tacticalAggregate,
+      microLogs: payload.microLogs || state.microLogs,
+      serverClockOffset: offset
+    };
+  })
 }));
