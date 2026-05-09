@@ -244,7 +244,9 @@ auth.post('/bind', async (c) => {
       method: 'POST',
       body: JSON.stringify({ factionId: factionId.toString() })
     })
-    await monitor.fetch('http://do/internal/start')
+    // ⚠️ DO NOT automatically start the engine here. 
+    // It should only start when the user explicitly clicks the switch 
+    // or when the scheduled faction poller triggers it (which respects the global switch).
   } catch (e) {
     console.error(`[Auth] Failed to proactively ping DO for faction ${factionId}:`, e)
   }

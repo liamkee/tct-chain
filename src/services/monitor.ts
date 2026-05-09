@@ -272,12 +272,8 @@ export class ChainMonitor implements DurableObject {
         return;
       }
 
-      let switchState = await this.state.storage.get<string>('master_switch');
-      if (!switchState) {
-        switchState = 'ON';
-        await this.state.storage.put('master_switch', 'ON');
-      }
-
+      let switchState = await this.state.storage.get<string>('master_switch') || 'OFF';
+      
       if (switchState === 'OFF') {
         return;
       }
