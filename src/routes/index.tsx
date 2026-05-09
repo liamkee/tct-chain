@@ -34,6 +34,7 @@ function DashboardLayout() {
   const trend = useDashboardStore(state => state.trend);
   const masterSwitch = useDashboardStore(state => state.masterSwitch);
   const lastUpdatedAt = useDashboardStore(state => state.lastUpdatedAt);
+  const members = useDashboardStore(state => state.members);
   const serverClockOffset = useDashboardStore(state => state.serverClockOffset);
 
   const [timer, setTimer] = useState('5:00');
@@ -96,7 +97,7 @@ function DashboardLayout() {
           <div className="px-10 pt-8 grid grid-cols-3 gap-8 items-center">
             {/* Left Wing: Link & Speed */}
             <div className="flex flex-col gap-4">
-              <StatCard label="Link" value={isConnected ? 'Active' : 'Broken'} sub={`Update: ${lastUpdatedAt > 0 ? `${Math.round((now + serverClockOffset - lastUpdatedAt) / 1000)}s` : 'WAIT'}`} color={isConnected ? 'text-emerald-400' : 'text-rose-500'} />
+              <StatCard label="Tool Status" value={isConnected ? 'Active' : 'Broken'} sub={`Last Update: ${lastUpdatedAt > 0 ? `${Math.round((now + serverClockOffset - lastUpdatedAt) / 1000)}s` : 'WAIT'}`} color={isConnected ? 'text-emerald-400' : 'text-rose-500'} />
               <StatCard label="Speed" value={hpm.toFixed(1)} sub={trend === 'UP' ? '↑ Increasing' : trend === 'DOWN' ? '↓ Decreasing' : '— Stable'} color="text-emerald-400" />
             </div>
 
@@ -127,13 +128,24 @@ function DashboardLayout() {
               </div>
             </div>
 
-            {/* Right Wing: Stats/Future proof */}
+            {/* Right Wing: Tactical Hits & Reserves */}
             <div className="flex flex-col gap-4">
-              <StatCard label="Efficiency" value={`${progress.toFixed(1)}%`} sub="CHAIN COMPLETION" color="text-indigo-400" />
-              <div className="bg-zinc-900/30 border border-white/5 rounded-2xl p-4 flex flex-col justify-center min-h-[85px]">
-                <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mb-1">Tactical Status</span>
-                <span className="text-sm font-bold text-zinc-400 uppercase tracking-tighter">Ready for Action</span>
-              </div>
+              <StatCard 
+                label="Available Hits" 
+                value={
+                  Object.keys(members).length > 0 
+                    ? Math.floor(Object.values(members).reduce((acc, m) => acc + (m.last_updated ? (m.energy || 0) : 0), 0) / 25).toString()
+                    : 'NO DATA'
+                } 
+                sub="Current Total Energy / 25" 
+                color="text-indigo-400" 
+              />
+              <StatCard 
+                label="Strategic Reserves" 
+                value={`+${Object.values(members).filter(m => m.status?.state === 'Okay' && m.last_updated).length * 16}`} 
+                sub="Est. Xanax & FHC Potential" 
+                color="text-cyan-400" 
+              />
             </div>
           </div>
 

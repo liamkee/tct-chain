@@ -10,6 +10,7 @@ interface MemberData {
   refill_used: boolean;
   is_donator: boolean;
   cooldowns: any;
+  last_updated?: number;
 }
 
 interface ChainStatus {
@@ -114,6 +115,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         refill_used: memberData.refill_used || false,
         is_donator: memberData.is_donator || false,
         cooldowns: memberData.cooldowns || { drug: 0, medical: 0, booster: 0 },
+        last_updated: memberData.last_updated,
       };
     });
 

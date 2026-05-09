@@ -85,7 +85,7 @@ export const MemberGrid: React.FC = () => {
   };
 
   const controls = (
-    <div className="flex items-center justify-end gap-2 mb-4 px-4 md:px-6">
+    <div className="flex items-center justify-center gap-3 mb-6 px-4 md:px-6">
       <FilterButton
         active={filters.hideOffline}
         onClick={() => toggleFilter('hideOffline')}
@@ -205,12 +205,12 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isS
       <div className="col-span-3 flex items-center gap-3">
         <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
           <div
-            className="h-full bg-linear-to-r from-indigo-500 to-cyan-400 transition-all duration-1000"
-            style={{ width: `${((member.energy || 0) / (member.energy_max || 100)) * 100}%` }}
+            className={`h-full transition-all duration-1000 ${member.last_updated ? 'bg-linear-to-r from-indigo-500 to-cyan-400' : 'bg-transparent'}`}
+            style={{ width: `${(member.last_updated ? ((member.energy || 0) / (member.energy_max || 100)) * 100 : 0)}%` }}
           />
         </div>
-        <span className="text-[10px] font-mono text-zinc-400 min-w-[45px] text-right">
-          {member.energy || 0}/{member.energy_max || 100}
+        <span className={`text-[10px] font-mono min-w-[45px] text-right ${member.last_updated ? 'text-zinc-400' : 'text-zinc-600 tracking-tighter uppercase font-black'}`}>
+          {member.last_updated ? `${member.energy || 0}/${member.energy_max || 100}` : 'No Data'}
         </span>
       </div>
       
