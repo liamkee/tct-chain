@@ -90,55 +90,7 @@ export const DashboardControls: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <FilterButton
-            active={filters.hideOffline}
-            onClick={() => toggleFilter('hideOffline')}
-            label="HIDE OFFLINE"
-          />
-          <FilterButton
-            active={filters.hideHospital}
-            onClick={() => toggleFilter('hideHospital')}
-            label="HIDE IN HOSP"
-          />
-          <div className="h-4 w-px bg-white/10 mx-2" />
-          <FilterButton
-            active={filters.sortByPower}
-            onClick={() => toggleFilter('sortByPower')}
-            label="ENERGY DESC"
-          />
-
-          {/* View Mode Toggle at the end */}
-          <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg border border-white/5 ml-4">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
-              title="Grid View"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
-              title="List View"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="21" y1="6" y2="6" /><line x1="3" x2="21" y1="12" y2="12" /><line x1="3" x2="21" y1="18" y2="18" /></svg>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   )
 }
-
-const FilterButton: React.FC<{ active: boolean, onClick: () => void, label: string }> = ({ active, onClick, label }) => (
-  <button
-    onClick={onClick}
-    className={`px-3 py-1.5 rounded-md text-[10px] font-black tracking-tighter transition-all border ${active
-        ? 'bg-indigo-500 text-white border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
-        : 'bg-zinc-800/50 text-zinc-500 border-white/5 hover:border-white/20'
-      }`}
-  >
-    {label}
-  </button>
-)

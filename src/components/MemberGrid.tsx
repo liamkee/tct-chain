@@ -4,8 +4,7 @@ import { useDashboardStore } from '../hooks/useDashboardStore'
 export const MemberGrid: React.FC = () => {
   const members = useDashboardStore((state) => state.members);
   const globalSelectedMembers = useDashboardStore((state) => state.globalSelectedMembers);
-  const filters = useDashboardStore((state) => state.filters);
-  const viewMode = useDashboardStore((state) => state.viewMode);
+  const { filters, toggleFilter, viewMode, setViewMode } = useDashboardStore();
 
   const processedMembers = Object.values(members)
     .filter(m => {
@@ -36,40 +35,91 @@ export const MemberGrid: React.FC = () => {
       return 0;
     });
 
-  if (viewMode === 'list') {
-    return (
-      <div className="flex flex-col gap-1 p-2 md:p-4">
-        {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5">
-          <div className="col-span-3">Personnel</div>
-          <div className="col-span-2">Life Status</div>
-          <div className="col-span-2">Activity</div>
-          <div className="col-span-3">Energy</div>
-          <div className="col-span-2 text-right">Cooldowns</div>
-        </div>
-        {processedMembers.map((member) => (
-          <MemberRow 
-            key={member.id} 
-            member={member} 
-            isSelected={globalSelectedMembers.includes(member.id)}
-          />
-        ))}
+  const controls = (
+    <div className="flex items-center justify-end gap-2 mb-4 px-4 md:px-6">
+      <FilterButton
+        active={filters.hideOffline}
+        onClick={() => toggleFilter('hideOffline')}
+        label="HIDE OFFLINE"
+      />
+      <FilterButton
+        active={filters.hideHospital}
+        onClick={() => toggleFilter('hideHospital')}
+        label="HIDE IN HOSP"
+      />
+      <div className="h-4 w-px bg-white/10 mx-2" />
+      <FilterButton
+        active={filters.sortByPower}
+        onClick={() => toggleFilter('sortByPower')}
+        label="ENERGY DESC"
+      />
+
+      <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg border border-white/5 ml-4">
+        <button
+          onClick={() => setViewMode('grid')}
+          className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+          title="Grid View"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>
+        </button>
+        <button
+          onClick={() => setViewMode('list')}
+          className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+          title="List View"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="21" y1="6" y2="6" /><line x1="3" x2="21" y1="12" y2="12" /><line x1="3" x2="21" y1="18" y2="18" /></svg>
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4 p-2 md:p-4">
-      {processedMembers.map((member) => (
-        <MemberCard 
-          key={member.id} 
-          member={member} 
-          isSelected={globalSelectedMembers.includes(member.id)}
-        />
-      ))}
+    <div className="flex flex-col">
+      {controls}
+      {viewMode === 'list' ? (
+        <div className="flex flex-col gap-1 p-2 md:p-4">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5">
+            <div className="col-span-3">Personnel</div>
+            <div className="col-span-2">Life Status</div>
+            <div className="col-span-2">Activity</div>
+            <div className="col-span-3">Energy</div>
+            <div className="col-span-2 text-right">Cooldowns</div>
+          </div>
+          {processedMembers.map((member) => (
+            <MemberRow 
+              key={member.id} 
+              member={member} 
+              isSelected={globalSelectedMembers.includes(member.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4 p-2 md:p-4">
+          {processedMembers.map((member) => (
+            <MemberCard 
+              key={member.id} 
+              member={member} 
+              isSelected={globalSelectedMembers.includes(member.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
+
+const FilterButton: React.FC<{ active: boolean, onClick: () => void, label: string }> = ({ active, onClick, label }) => (
+  <button
+    onClick={onClick}
+    className={`px-3 py-1.5 rounded-md text-[10px] font-black tracking-tighter transition-all border ${active
+        ? 'bg-indigo-500 text-white border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
+        : 'bg-zinc-800/50 text-zinc-500 border-white/5 hover:border-white/20'
+      }`}
+  >
+    {label}
+  </button>
+);
 
 const MemberCard: React.FC<{ member: any, isSelected: boolean }> = ({ member, isSelected }) => {
   const statusColor = member.status?.state === 'Okay' ? 'bg-emerald-500' : 
