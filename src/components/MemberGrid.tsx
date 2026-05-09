@@ -244,7 +244,11 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
             </span>
           </div>
         )}
-        {!(member.cooldowns?.drug > 0 || member.cooldowns?.medical > 0 || member.cooldowns?.booster > 0) && (
+        {member.last_updated ? (
+          !(member.cooldowns?.drug > 0 || member.cooldowns?.medical > 0 || member.cooldowns?.booster > 0) && (
+            <span className="text-[10px] text-zinc-800 tracking-tighter uppercase font-black opacity-30">No active CDs</span>
+          )
+        ) : (
           <span className="text-[10px] text-zinc-700 tracking-tighter uppercase font-black">No Data</span>
         )}
       </div>

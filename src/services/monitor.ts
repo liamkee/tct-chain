@@ -76,7 +76,7 @@ export class ChainMonitor implements DurableObject {
       }
       console.log(`[DO] Startup: Loaded ${this.memberDataCache.size} members into memory cache.`);
       this.microLogs.push({ ts: Date.now(), msg: `Engine loaded: ${this.memberDataCache.size} cached members` });
-      
+
       // 🚀 Pre-fetch DB members so they are available for immediate snapshots
       if (this.factionId) {
         this.syncDbMembers().catch(e => console.error('[DO] Startup DB sync failed', e));
@@ -291,8 +291,8 @@ export class ChainMonitor implements DurableObject {
       await this.state.storage.put('master_switch', 'OFF');
       this.masterSwitch = 'OFF';
       this.microLogs.push({ ts: Date.now(), msg: 'Engine Manual Stop: Polling suspended' });
-      this.broadcastToWebSockets({ 
-        type: 'HEARTBEAT', 
+      this.broadcastToWebSockets({
+        type: 'HEARTBEAT',
         master_switch: 'OFF',
         lastUpdatedAt: this.lastUpdatedAt,
         do_server_time_ms: Date.now()
@@ -311,9 +311,9 @@ export class ChainMonitor implements DurableObject {
 
       // 🚀 Immediate broadcast of full snapshot so members appear instantly
       const snapshot = await this.getFullSnapshot();
-      this.broadcastToWebSockets({ 
-        type: 'SNAPSHOT', 
-        data: snapshot 
+      this.broadcastToWebSockets({
+        type: 'SNAPSHOT',
+        data: snapshot
       });
 
       return new Response('System Started');
@@ -350,7 +350,7 @@ export class ChainMonitor implements DurableObject {
   private async getFullSnapshot() {
     // Use the prediction engine to get the latest state of all 40 members
     const predicted = this.getMembersWithPrediction();
-    
+
     // Get target from storage (default to 100 if not set)
     const chainTarget = await this.state.storage.get<number>('chain_target') || 100;
 
@@ -456,7 +456,7 @@ export class ChainMonitor implements DurableObject {
         for (const [id, m] of Object.entries(membersData) as [string, any][]) {
           const existing = this.memberDataCache.get(id) || {};
           const currentStatusStr = `${m.status?.state}_${m.last_action?.status}`;
-          
+
           if (currentStatusStr !== this.memberStatusCache.get(id) || !existing.name) {
             const merged = {
               ...existing,
@@ -477,13 +477,20 @@ export class ChainMonitor implements DurableObject {
         const membersToUpdate = Object.keys(membersData).filter(id => {
           if (!activeMemberKeys.get(id)) return false;
           const m = membersData[id];
-          const status = m.status?.state;
-          if (status === 'Hospital' || status === 'Jail' || status === 'Traveling') return false;
-          
-          const pendingKey = `${id}_${m.last_action?.timestamp}`;
-          if (this.pendingPolls.has(pendingKey)) return false;
-          this.pendingPolls.set(pendingKey, Date.now());
-          return true;
+          const existing = this.memberDataCache.get(id);
+
+          // 🚀 Poll if: No data yet, OR status changed, OR action timestamp changed
+          const isInitial = !existing || !existing.last_updated;
+          const statusChanged = existing && m.status?.state !== existing.status?.state;
+          const actionChanged = existing && m.last_action?.timestamp !== existing.last_action?.timestamp;
+
+          if (isInitial || statusChanged || actionChanged) {
+            const pendingKey = `${id}_${m.last_action?.timestamp}_${m.status?.state}`;
+            if (this.pendingPolls.has(pendingKey)) return false;
+            this.pendingPolls.set(pendingKey, Date.now());
+            return true;
+          }
+          return false;
         });
 
         if (membersToUpdate.length > 0) {
