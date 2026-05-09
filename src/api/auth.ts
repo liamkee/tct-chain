@@ -220,7 +220,7 @@ auth.post('/bind', async (c) => {
       name,
       api_key: encryptedKey,
       role: detectedRole,
-      is_donator: tornData.donator ? 1 : 0,
+
       faction_id: factionId
     })
   }

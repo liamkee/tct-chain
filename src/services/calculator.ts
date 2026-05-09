@@ -46,7 +46,7 @@ export interface MemberTacticalData {
     status: string;
     seconds: number;
   };
-  is_donator: boolean;
+
   refill_used: boolean;
 }
 
@@ -139,12 +139,12 @@ export class TacticalCalculator {
    * 基础能量计算 (Internal helper for deduplication)
    */
   private static getBaseAvailableEnergy(member: MemberTacticalData): number {
-    const { energy, energy_max, is_donator, refill_used } = member;
+    const { energy, energy_max, refill_used } = member;
     let total = energy || 0;
     
     // 如果 Refill 沒用過，計入一次
     if (!refill_used) {
-      total += getItemEnergy(TORN_ITEMS.REFILL, is_donator, energy_max);
+      total += getItemEnergy(TORN_ITEMS.REFILL, energy_max);
     }
     return total;
   }
@@ -154,7 +154,7 @@ export class TacticalCalculator {
    * 修正：離線成員如果沒住院，其現有能量也應算作即時戰力
    */
   static calculatePotential(member: MemberTacticalData) {
-    const { energy_max, is_donator, status } = member;
+    const { energy_max, status } = member;
     
     // 1. 判斷是否“可出擊”：只要沒住院、沒坐牢、沒旅遊，能量就是隨時可用的
     const isTacticallyAvailable = !['Hospital', 'Jail', 'Traveling'].includes(status.state);
@@ -166,7 +166,7 @@ export class TacticalCalculator {
     return {
       isAvailable: isTacticallyAvailable,
       availableHits,
-      maxEnergy: energy_max || (is_donator ? TORN_RULES.BASE_ENERGY_DONATOR : TORN_RULES.BASE_ENERGY_NORMAL)
+      maxEnergy: energy_max || TORN_RULES.BASE_ENERGY_NORMAL
     };
   }
 
@@ -175,7 +175,7 @@ export class TacticalCalculator {
    * 不再計算 FHC，因為那不是常規戰術參考
    */
   static predictBurstPotential(member: MemberTacticalData) {
-    const { energy_max, cooldowns, is_donator, status } = member;
+    const { energy_max, cooldowns, status } = member;
     if (['Hospital', 'Jail', 'Traveling'].includes(status.state)) {
       return { totalPotentialEnergy: 0, maxPotentialHits: 0 };
     }
@@ -184,13 +184,13 @@ export class TacticalCalculator {
 
     // 1. Refill
     if (!member.refill_used) {
-      totalEnergy += getItemEnergy(TORN_ITEMS.REFILL, is_donator, energy_max);
+      totalEnergy += getItemEnergy(TORN_ITEMS.REFILL, energy_max);
     }
 
     // 2. Xanax (如果沒 CD)
     let xanaxCount = 0;
-    if ((cooldowns?.drug || 0) === 0) {
-      totalEnergy += getItemEnergy(TORN_ITEMS.XANAX, is_donator);
+    if (cooldowns && (cooldowns.drug || 0) === 0) {
+      totalEnergy += getItemEnergy(TORN_ITEMS.XANAX);
       xanaxCount++;
     }
 
@@ -209,7 +209,7 @@ export class TacticalCalculator {
    * 修正：不再計算 FHC，只計算自然回能 + 1次 Xanax (如果CD到)
    */
   static predictPotentialOverTime(member: MemberTacticalData, targetMinutes: number) {
-    const { cooldowns, is_donator, status } = member;
+    const { cooldowns, status, energy_max } = member;
     
     // 1. 基礎可用能量 (當前，不含 Refill)
     let totalEnergy = member.energy || 0;
@@ -220,13 +220,15 @@ export class TacticalCalculator {
     const hospRemainingMinutes = Math.ceil(hospRemainingSeconds / 60);
     
     const effectiveRegenMinutes = Math.max(0, targetMinutes - hospRemainingMinutes);
-    const regenInterval = is_donator ? TORN_RULES.REGEN_INTERVAL_DONATOR : TORN_RULES.REGEN_INTERVAL_NORMAL;
+    const isDonator = (energy_max || 100) > 100;
+    const regenInterval = isDonator ? TORN_RULES.REGEN_INTERVAL_DONATOR : TORN_RULES.REGEN_INTERVAL_NORMAL;
     const totalRegenEnergy = Math.floor(effectiveRegenMinutes / regenInterval) * TORN_RULES.REGEN_AMOUNT;
     totalEnergy += totalRegenEnergy;
 
     // 3. 資源釋放推演 (只計算 Xanax)
-    if ((cooldowns?.drug || 0) <= targetMinutes * 60) {
-      totalEnergy += getItemEnergy(TORN_ITEMS.XANAX, is_donator);
+    const drugCdMinutes = (cooldowns?.drug || 0) / 60;
+    if (drugCdMinutes <= targetMinutes) {
+      totalEnergy += getItemEnergy(TORN_ITEMS.XANAX);
     }
 
     return {

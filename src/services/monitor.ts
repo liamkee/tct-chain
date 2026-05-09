@@ -539,7 +539,7 @@ export class ChainMonitor implements DurableObject {
     let predictedCount = 0;
 
     for (const [id, data] of this.memberDataCache.entries()) {
-      const isDonator = data.is_donator ?? (data.energy_max || 100) > 100;
+
       const lastUpdated = data.last_updated || 0;
 
       const isOffline = data.last_action?.status === 'Offline' ||
@@ -553,7 +553,7 @@ export class ChainMonitor implements DurableObject {
 
       if (data.energy !== undefined && isOffline && lastUpdated > 0) {
         const energyPred = TacticalCalculator.predictCurrentEnergy(
-          data.energy, data.energy_max || 100, lastUpdated, isDonator
+          data.energy, data.energy_max || 100, lastUpdated, (data.energy_max || 100) > 100
         );
         currentEnergy = energyPred.energy;
         energyPredicted = true;
@@ -594,7 +594,7 @@ export class ChainMonitor implements DurableObject {
           status: { state: 'Okay', until: 0 },
           last_action: { status: 'Offline', seconds: 0 },
           refill_used: false,
-          is_donator: false,
+
           is_pending: true // Mark as pending first poll
         };
       }

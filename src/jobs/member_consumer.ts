@@ -102,7 +102,7 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
            updates: {
             energy: data.energy?.current,
             energy_max: isDonator ? 150 : 100,
-            is_donator: isDonator,
+
             cooldowns: data.cooldowns,
             refill_used: data.refills ? data.refills.energy === false : false,
             last_updated: Math.floor(Date.now() / 1000)

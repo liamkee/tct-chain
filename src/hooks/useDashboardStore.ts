@@ -8,7 +8,7 @@ interface MemberData {
   status: any;
   last_action: any;
   refill_used: boolean;
-  is_donator: boolean;
+
   cooldowns: any;
   last_updated?: number;
 }
@@ -113,7 +113,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         energy: memberData.energy || 0,
         energy_max: memberData.energy_max || 100,
         refill_used: memberData.refill_used || false,
-        is_donator: memberData.is_donator || false,
+
         cooldowns: memberData.cooldowns || { drug: 0, medical: 0, booster: 0 },
         last_updated: memberData.last_updated,
       };

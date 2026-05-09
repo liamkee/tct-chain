@@ -70,9 +70,9 @@ export const TORN_ITEMS: Record<string, ItemDefinition> = {
 /**
  * Get effective energy based on user status.
  */
-export const getItemEnergy = (item: ItemDefinition, isDonator: boolean, maxEnergy?: number): number => {
+export const getItemEnergy = (item: ItemDefinition, maxEnergy?: number): number => {
   if (item.energy === 'full_refill') {
-    return maxEnergy || (isDonator ? TORN_RULES.BASE_ENERGY_DONATOR : TORN_RULES.BASE_ENERGY_NORMAL);
+    return maxEnergy || TORN_RULES.BASE_ENERGY_NORMAL;
   }
   return item.energy;
 };
