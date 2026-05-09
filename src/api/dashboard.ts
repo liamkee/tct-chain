@@ -37,8 +37,6 @@ const adminOnly = async (c: any, next: any) => {
   await next()
 }
 
-dashboard.use('/start', adminOnly)
-dashboard.use('/stop', adminOnly)
 dashboard.use('/clear', adminOnly)
 
 // Initial snapshot

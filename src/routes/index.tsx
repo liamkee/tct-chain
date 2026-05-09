@@ -13,7 +13,7 @@ export const Route = createFileRoute('/')({
 
 function Index() {
   const { isAuthenticated, user, isInitialized, checkAuth } = useAuthStore()
-  
+
   useEffect(() => {
     checkAuth()
   }, [])
@@ -37,7 +37,7 @@ function Index() {
 function DashboardContent() {
   // 启动 WebSocket 引擎
   useTctSocket();
-  
+
   const chain = useDashboardStore((state) => state.chain);
   const isConnected = useDashboardStore((state) => state.isConnected);
   const microLogs = useDashboardStore((state) => state.microLogs);
@@ -56,7 +56,7 @@ function DashboardContent() {
       setLocalTimeout(diff);
       requestRef.current = requestAnimationFrame(animate);
     };
-    
+
     requestRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(requestRef.current);
   }, [chain.deadline]);
@@ -65,7 +65,7 @@ function DashboardContent() {
   const formatTimeout = (s: number) => {
     const mins = Math.floor(s / 60);
     const secs = Math.floor(s % 60);
-    const ms = Math.floor((s % 1) * 100); 
+    const ms = Math.floor((s % 1) * 100);
     return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
   };
 
@@ -78,7 +78,7 @@ function DashboardContent() {
   };
 
   const isCritical = localTimeout > 0 && localTimeout < 60;
-  const isBroken = localTimeout <= 0 && chain.current > 0; 
+  const isBroken = localTimeout <= 0 && chain.current > 0;
   const progress = Math.min(100, (chain.current / (chain.target || 1)) * 100);
 
   return (
@@ -89,7 +89,7 @@ function DashboardContent() {
       )}
 
       {/* 顶部作战指挥栏 (War Room Header) */}
-      <header className="sticky top-0 z-50 border-b border-white/5 bg-zinc-950/80 backdrop-blur-xl">
+      <header className="border-b border-white/5 bg-zinc-950/80">
         <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-6">
           <div className="flex items-center gap-6">
             <div className="flex flex-col">
@@ -109,9 +109,8 @@ function DashboardContent() {
               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Speed (HPM)</span>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-mono font-black text-emerald-400">{hpm.toFixed(1)}</span>
-                <span className={`text-xs font-bold ${
-                  trend === 'UP' ? 'text-emerald-500' : trend === 'DOWN' ? 'text-rose-500' : 'text-zinc-500'
-                }`}>
+                <span className={`text-xs font-bold ${trend === 'UP' ? 'text-emerald-500' : trend === 'DOWN' ? 'text-rose-500' : 'text-zinc-500'
+                  }`}>
                   {trend === 'UP' ? '↑' : trend === 'DOWN' ? '↓' : '→'}
                 </span>
               </div>
@@ -135,8 +134,8 @@ function DashboardContent() {
                 <span className="text-zinc-600 text-sm font-bold">/ {chain.target}</span>
               </div>
               <div className="w-full h-1 bg-zinc-800 rounded-full mt-1 overflow-hidden">
-                <div 
-                  className="h-full bg-indigo-500 transition-all duration-1000" 
+                <div
+                  className="h-full bg-indigo-500 transition-all duration-1000"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -166,44 +165,68 @@ function DashboardContent() {
       <DashboardControls />
 
       <main className="max-w-[1600px] mx-auto pt-4 px-2 md:px-0">
-        <div className="px-4 md:px-6 mb-6">
-           <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-wrap gap-8 items-center justify-between">
-              <div className="flex gap-6 items-center">
-                <div className="h-12 w-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-2xl border border-indigo-500/20">
-                   🔥
-                </div>
-                <div>
-                   <h4 className="text-sm font-bold text-zinc-200 uppercase tracking-widest">Tactical Projection</h4>
-                   <p className="text-xs text-zinc-500 mt-0.5">Real-time resource simulation for Phase 3 deployment</p>
+        <div className="px-3 md:px-4 mb-6">
+          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-wrap gap-8 items-center justify-between">
+            <div className="flex gap-6 items-center">
+              <div>
+                <h4 className="text-sm font-bold text-zinc-200 uppercase tracking-widest">Tactical Projection</h4>
+                <p className="text-xs text-zinc-500 mt-0.5">Real-time resource simulation</p>
+              </div>
+            </div>
+
+            <div className="flex gap-12">
+              <div className="text-center">
+                <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Instant Capacity</span>
+                <span className="text-xl font-mono font-black text-emerald-400">{tacticalAggregate?.totalAvailableHits || 0}</span>
+                <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+              </div>
+              <div className="text-center">
+                <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">1h Predicted Output</span>
+                <span className="text-xl font-mono font-black text-indigo-400">{tacticalAggregate?.totalProjectedHits1h || 0}</span>
+                <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+              </div>
+              <div className="text-center">
+                <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Theoretical Max</span>
+                <span className="text-xl font-mono font-black text-zinc-300">{tacticalAggregate?.totalMaxPotentialHits || 0}</span>
+                <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+              </div>
+
+              <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
+
+              <div className="text-center relative">
+                <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Target Gap</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xl font-mono font-black ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-400' :
+                    (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-400' :
+                      (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-400' : 'text-rose-500'
+                    }`}>
+                    {Math.max(0, chain.target - chain.current)}
+                  </span>
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="text-[8px] text-zinc-600 font-bold">REMAINING</span>
+                    <span className={`text-[9px] font-black uppercase ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-500' :
+                      (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-500' :
+                        (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-500' : 'text-rose-600'
+                      }`}>
+                      {(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'Overkill' :
+                        (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'Secured' :
+                          (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'Possible' : 'Shortfall'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-12">
-                <div className="text-center">
-                  <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Instant Capacity</span>
-                  <span className="text-xl font-mono font-black text-emerald-400">{tacticalAggregate?.totalAvailableHits || 0}</span>
-                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
-                </div>
-                <div className="text-center">
-                  <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">1h Predicted Output</span>
-                  <span className="text-xl font-mono font-black text-indigo-400">{tacticalAggregate?.totalProjectedHits1h || 0}</span>
-                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
-                </div>
-                <div className="text-center">
-                  <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Theoretical Max</span>
-                  <span className="text-xl font-mono font-black text-zinc-300">{tacticalAggregate?.totalMaxPotentialHits || 0}</span>
-                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
-                </div>
-                <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
-                <div className="text-center">
-                  <span className="block text-[10px] text-rose-500/80 font-bold uppercase mb-1">Buffer Safety</span>
-                  <span className={`text-xl font-mono font-black ${localTimeout < 60 ? 'text-rose-500' : 'text-zinc-100'}`}>
-                    {Math.floor(hpm * (localTimeout / 60))}
-                  </span>
-                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
-                </div>
+              <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
+
+              <div className="text-center">
+                <span className="block text-[10px] text-rose-500/80 font-bold uppercase mb-1">Buffer Safety</span>
+                <span className={`text-xl font-mono font-black ${localTimeout < 60 ? 'text-rose-500' : 'text-zinc-100'}`}>
+                  {Math.floor(hpm * (localTimeout / 60))}
+                </span>
+                <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
               </div>
-           </div>
+            </div>
+          </div>
         </div>
 
         <MemberGrid />

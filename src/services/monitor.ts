@@ -4,8 +4,8 @@ import { DiscordWebhookService } from './discord_webhook'
 export class ChainMonitor implements DurableObject {
   private state: DurableObjectState;
   private env: Env['Bindings'];
-  private microLogs: Array<{ts: number, msg: string}> = [];
-  
+  private microLogs: Array<{ ts: number, msg: string }> = [];
+
   // 内存态缓存 (用于去重)
   private factionId: string | null = null;
   private commanderKeyCache: string | null = null;
@@ -27,8 +27,8 @@ export class ChainMonitor implements DurableObject {
     this.state.blockConcurrencyWhile(async () => {
       const stored = await this.state.storage.get<any>([
         'faction_id',
-        'chain_current', 
-        'chain_timeout', 
+        'chain_current',
+        'chain_timeout',
         'micro_logs',
         'member_status_cache',
         'member_minutes_cache',
@@ -38,13 +38,13 @@ export class ChainMonitor implements DurableObject {
         'interval_counter',
         'chain_deadline_ms'
       ]);
-      
+
       const storedMap = stored as Map<string, any>;
       this.factionId = storedMap.get('faction_id') ?? null;
       this.lastChainCurrent = storedMap.get('chain_current') ?? -1;
       this.lastChainTimeout = storedMap.get('chain_timeout') ?? -1;
       this.microLogs = storedMap.get('micro_logs') ?? [];
-      
+
       const statusMap = storedMap.get('member_status_cache');
       if (statusMap) {
         this.memberStatusCache = new Map(Object.entries(statusMap));
@@ -81,7 +81,7 @@ export class ChainMonitor implements DurableObject {
 
     // 暴露状态查询给 Dashboard
     if (url.pathname === '/status') {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         factionId: this.factionId,
         lastUpdatedAt: this.lastUpdatedAt,
         chainCurrent: this.lastChainCurrent,
@@ -91,7 +91,7 @@ export class ChainMonitor implements DurableObject {
 
     if (url.pathname === '/toggle') {
       const { state } = await request.json() as { state: 'ON' | 'OFF' };
-      
+
       await this.state.storage.put('master_switch', state);
 
       if (state === 'ON') {
@@ -112,16 +112,16 @@ export class ChainMonitor implements DurableObject {
     } else if (url.pathname === '/internal/token-bucket') {
       const apiKey = url.searchParams.get('key') || 'UNKNOWN';
       const count = parseInt(url.searchParams.get('count') || '1', 10);
-      
+
       const bucketKey = `rate_limit_${apiKey}`;
       const now = Date.now();
-      
-      let bucket = await this.state.storage.get<{tokens: number, resetAt: number}>(bucketKey) || { tokens: 90, resetAt: now + 60000 };
-      
+
+      let bucket = await this.state.storage.get<{ tokens: number, resetAt: number }>(bucketKey) || { tokens: 90, resetAt: now + 60000 };
+
       if (now > bucket.resetAt) {
         bucket = { tokens: 90, resetAt: now + 60000 };
       }
-      
+
       if (bucket.tokens >= count) {
         bucket.tokens -= count;
         await this.state.storage.put(bucketKey, bucket);
@@ -133,8 +133,8 @@ export class ChainMonitor implements DurableObject {
 
     if (url.pathname === '/internal/offset') {
       const { offset } = await request.json() as { offset: number };
-      this.manualOffset = offset;
-      await this.state.storage.put('manual_offset', offset);
+      this.manualOffset = Math.max(0, offset);
+      await this.state.storage.put('manual_offset', this.manualOffset);
       this.dispatchAlert(`Manual Sync Offset adjusted to ${offset}ms`);
       return new Response(JSON.stringify({ success: true, offset }), {
         headers: { 'Content-Type': 'application/json' }
@@ -143,81 +143,82 @@ export class ChainMonitor implements DurableObject {
 
     // 🚀 批量数据写入接口
     if (url.pathname === '/internal/update-members-batch') {
-       if (request.method === 'POST') {
-          const items = await request.json() as any[];
-          const storageUpdates: Record<string, any> = {};
-          
-          for (const item of items) {
-             for (const [field, value] of Object.entries(item.updates)) {
-                storageUpdates[`member_${item.id}_${field}`] = value;
-             }
-             const stringId = item.id.toString();
-             this.broadcastToWebSockets({ 
-               type: 'MEMBER_SOFT_UPDATE', 
-               id: stringId, 
-               data: item.updates 
-             });
+      if (request.method === 'POST') {
+        const items = await request.json() as any[];
+        const storageUpdates: Record<string, any> = {};
+
+        for (const item of items) {
+          for (const [field, value] of Object.entries(item.updates)) {
+            storageUpdates[`member_${item.id}_${field}`] = value;
           }
-          
-          await this.state.storage.put(storageUpdates);
-          return new Response('OK');
-       }
+          const stringId = item.id.toString();
+          this.broadcastToWebSockets({
+            type: 'MEMBER_SOFT_UPDATE',
+            id: stringId,
+            data: item.updates
+          });
+        }
+
+        await this.state.storage.put(storageUpdates);
+        return new Response('OK');
+      }
     }
 
     // 🚀 批量日志接口
     if (url.pathname === '/internal/log-batch') {
-       if (request.method === 'POST') {
-          const { msgs } = await request.json() as { msgs: string[] };
-          for (const msg of msgs) {
-             this.microLogs.push({ ts: Date.now(), msg });
-          }
-          while (this.microLogs.length > 20) this.microLogs.shift();
-          this.broadcastToWebSockets({ type: 'LOG_UPDATE', microLogs: this.microLogs, do_server_time_ms: Date.now() });
-          return new Response('OK');
-       }
+      if (request.method === 'POST') {
+        const { msgs } = await request.json() as { msgs: string[] };
+        for (const msg of msgs) {
+          this.microLogs.push({ ts: Date.now(), msg });
+        }
+        while (this.microLogs.length > 20) this.microLogs.shift();
+        this.broadcastToWebSockets({ type: 'LOG_UPDATE', microLogs: this.microLogs, do_server_time_ms: Date.now() });
+        return new Response('OK');
+      }
     }
 
     if (url.pathname === '/snapshot') {
-       const allStorage = await this.state.storage.list();
-       const members: Record<string, any> = {};
-       const logs = this.microLogs;
-       
-       for (const [key, value] of allStorage.entries()) {
-          if (key.startsWith('member_')) {
-            members[key] = value;
-          }
-       }
+      const allStorage = await this.state.storage.list();
+      const members: Record<string, any> = {};
+      const logs = this.microLogs;
 
-       return new Response(JSON.stringify({
-         factionId: this.factionId,
-         members,
-         microLogs: logs,
-         chain_current: await this.state.storage.get('chain_current') || 0,
-         chain_timeout: await this.state.storage.get('chain_timeout') || 0,
-         chain_deadline_ms: await this.state.storage.get('chain_deadline_ms') || 0,
-         chain_max: await this.state.storage.get('chain_max') || 10,
-         current_hpm: this.hpmHistory.length > 0 ? (this.hpmHistory.reduce((a, b) => a + b, 0) / this.hpmHistory.length) * 6 : 0,
-         lastUpdatedAt: this.lastUpdatedAt,
-         do_server_time_ms: Date.now()
-       }), { headers: { 'Content-Type': 'application/json' } });
+      for (const [key, value] of allStorage.entries()) {
+        if (key.startsWith('member_')) {
+          members[key] = value;
+        }
+      }
+
+      return new Response(JSON.stringify({
+        factionId: this.factionId,
+        members,
+        microLogs: logs,
+        chain_current: await this.state.storage.get('chain_current') || 0,
+        chain_timeout: await this.state.storage.get('chain_timeout') || 0,
+        chain_deadline_ms: await this.state.storage.get('chain_deadline_ms') || 0,
+        chain_max: await this.state.storage.get('chain_max') || 10,
+        current_hpm: this.hpmHistory.length > 0 ? (this.hpmHistory.reduce((a, b) => a + b, 0) / this.hpmHistory.length) * 6 : 0,
+        lastUpdatedAt: this.lastUpdatedAt,
+        do_server_time_ms: Date.now(),
+        master_switch: await this.state.storage.get('master_switch') || 'OFF'
+      }), { headers: { 'Content-Type': 'application/json' } });
     }
 
     if (url.pathname === '/internal/stop') {
-       await this.state.storage.put('master_switch', 'OFF');
-       return new Response('System Stopped');
+      await this.state.storage.put('master_switch', 'OFF');
+      return new Response('System Stopped');
     }
 
     if (url.pathname === '/internal/start') {
-       await this.state.storage.setAlarm(Date.now() + 100);
-       await this.state.storage.put('master_switch', 'ON');
-       return new Response('System Started');
+      await this.state.storage.setAlarm(Date.now() + 100);
+      await this.state.storage.put('master_switch', 'ON');
+      return new Response('System Started');
     }
 
     if (url.pathname === '/internal/clear') {
-       await this.state.storage.deleteAll();
-       this.memberStatusCache.clear();
-       this.memberMinutesCache.clear();
-       return new Response('Storage Cleared');
+      await this.state.storage.deleteAll();
+      this.memberStatusCache.clear();
+      this.memberMinutesCache.clear();
+      return new Response('Storage Cleared');
     }
 
     return new Response('Not Found', { status: 404 });
@@ -259,7 +260,8 @@ export class ChainMonitor implements DurableObject {
       ...data,
       factionId: this.factionId,
       lastUpdatedAt: this.lastUpdatedAt,
-      microLogs: this.microLogs
+      microLogs: this.microLogs,
+      master_switch: await this.state.storage.get('master_switch') || 'OFF'
     };
   }
 
@@ -270,21 +272,17 @@ export class ChainMonitor implements DurableObject {
         return;
       }
 
-      let switchState = await this.state.storage.get<string>('master_switch');
-      if (!switchState) {
-        switchState = 'ON'; 
-        await this.state.storage.put('master_switch', 'ON');
-      }
-
+      let switchState = await this.state.storage.get<string>('master_switch') || 'OFF';
+      
       if (switchState === 'OFF') {
         return;
       }
 
       await this.state.storage.setAlarm(Date.now() + 10000);
-      
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
+
       let chainData: any = null;
       let membersData: any = null;
 
@@ -294,8 +292,8 @@ export class ChainMonitor implements DurableObject {
           // 或者要求每个 Faction 必须有一个 Commander Key
           const dbMembers = await this.env.DB.prepare('SELECT api_key FROM Members WHERE faction_id = ? AND api_key IS NOT NULL LIMIT 1').bind(this.factionId).first() as any;
           if (dbMembers?.api_key) {
-             const security = new (await import('../services/security')).SecurityService(this.env.ENCRYPTION_SECRET);
-             this.commanderKeyCache = await security.decrypt(dbMembers.api_key);
+            const security = new (await import('../services/security')).SecurityService(this.env.ENCRYPTION_SECRET);
+            this.commanderKeyCache = await security.decrypt(dbMembers.api_key);
           }
         }
 
@@ -307,13 +305,13 @@ export class ChainMonitor implements DurableObject {
         this.lastRTT = t2 - t1;
 
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-        
+
         const data = await res.json() as any;
         if (data.error) throw new Error(`Torn API Error: ${data.error.error}`);
-        
+
         chainData = data.chain;
         membersData = data.members || {};
-        
+
       } catch (fetchErr: any) {
         if (fetchErr.name === 'AbortError') throw new Error('Torn API timeout (5s)');
         throw fetchErr;
@@ -329,7 +327,7 @@ export class ChainMonitor implements DurableObject {
       if (chainData) {
         const { timeout, current, max } = chainData;
         const adjustedTimeout = Math.max(0, timeout - (this.lastRTT / 2 / 1000) + (this.manualOffset / 1000));
-        
+
         if (this.hpmHistory.length >= 6) {
           const last6 = this.hpmHistory.slice(-6);
           recentHPM = last6.reduce((a, b) => a + b, 0);
@@ -359,8 +357,25 @@ export class ChainMonitor implements DurableObject {
           this.lastChainTimeout = timeout;
           hasChanges = true;
         } else {
-           this.hpmHistory.push(0);
-           if (this.hpmHistory.length > 30) this.hpmHistory.shift();
+          this.hpmHistory.push(0);
+          if (this.hpmHistory.length > 30) this.hpmHistory.shift();
+        }
+
+        // 🚨 Phase 3: 脱管防御 (Risk Alert)
+        if (adjustedTimeout > 0 && adjustedTimeout < 30) {
+          const now = Date.now();
+          if (now - this.lastEmergencyAlertTs > 60000) { // 1 min throttle
+            this.dispatchAlert(`CRITICAL: Chain at risk! Timeout: ${Math.floor(adjustedTimeout)}s. HPM: ${currentHPM.toFixed(1)}`);
+            this.lastEmergencyAlertTs = now;
+
+            // Proactively try to alert via Discord if configured
+            try {
+              const service = new DiscordWebhookService(this.env);
+              await service.sendChainAlert(this.factionId || 'Unknown', current, Math.floor(adjustedTimeout), currentHPM);
+            } catch (e) {
+              console.error('[DO] Discord alert failed:', e);
+            }
+          }
         }
       }
 
@@ -373,7 +388,7 @@ export class ChainMonitor implements DurableObject {
 
           const currentStatusStr = `${member.status?.state}_${member.last_action?.status}`;
           const currentMinutes = Math.floor((member.last_action?.seconds || 0) / 60);
-            
+
           const cachedStatusStr = this.memberStatusCache.get(id);
           const cachedMinutes = this.memberMinutesCache.get(id);
 
@@ -381,7 +396,7 @@ export class ChainMonitor implements DurableObject {
             storageUpdates[`member_${id}_name`] = member.name;
             storageUpdates[`member_${id}_status`] = member.status;
             storageUpdates[`member_${id}_last_action`] = member.last_action;
-            
+
             this.memberStatusCache.set(id, currentStatusStr);
             this.memberMinutesCache.set(id, currentMinutes);
             hasChanges = true;
@@ -421,47 +436,47 @@ export class ChainMonitor implements DurableObject {
           return true;
         });
 
-        const memberMessages = membersToUpdate.map(id => ({ 
-          body: { 
-            tornId: id, 
-            apiKey: activeMemberKeys.get(id), 
+        const memberMessages = membersToUpdate.map(id => ({
+          body: {
+            tornId: id,
+            apiKey: activeMemberKeys.get(id),
             ts: Date.now(),
-            factionId: this.factionId 
+            factionId: this.factionId
           }
         }));
 
         if (memberMessages.length > 0) {
           for (let i = 0; i < memberMessages.length; i += 100) {
-             await this.env.MEMBER_QUEUE.sendBatch(memberMessages.slice(i, i + 100));
+            await this.env.MEMBER_QUEUE.sendBatch(memberMessages.slice(i, i + 100));
           }
         }
       }
 
       this.lastUpdatedAt = Date.now();
-      
+
       const storage = await this.state.storage.list();
       const allMembersData: Record<string, any> = {};
       const selectedIds: string[] = (await this.state.storage.get('global_selected_members')) || [];
-      
+
       // 🚀 Include all registered members from DB in the snapshot
       const dbMembers = await this.env.DB.prepare('SELECT torn_id, name FROM Members WHERE faction_id = ?').bind(this.factionId).all();
       const registeredIds = new Set(dbMembers.results.map((m: any) => m.torn_id.toString()));
 
       for (const [key, value] of storage.entries()) {
         if (key.startsWith('member_') && key.endsWith('_energy')) {
-           const id = key.split('_')[1];
-           const energyMax = await this.state.storage.get<number>(`member_${id}_energy_max`) || 100;
-           allMembersData[id] = {
-              id: id,
-              name: await this.state.storage.get(`member_${id}_name`),
-              energy: value,
-              energy_max: energyMax,
-              cooldowns: await this.state.storage.get(`member_${id}_cooldowns`),
-              status: await this.state.storage.get(`member_${id}_status`),
-              last_action: await this.state.storage.get(`member_${id}_last_action`),
-              refill_used: await this.state.storage.get(`member_${id}_refill_used`),
-              is_donator: energyMax > 100
-           };
+          const id = key.split('_')[1];
+          const energyMax = await this.state.storage.get<number>(`member_${id}_energy_max`) || 100;
+          allMembersData[id] = {
+            id: id,
+            name: await this.state.storage.get(`member_${id}_name`),
+            energy: value,
+            energy_max: energyMax,
+            cooldowns: await this.state.storage.get(`member_${id}_cooldowns`),
+            status: await this.state.storage.get(`member_${id}_status`),
+            last_action: await this.state.storage.get(`member_${id}_last_action`),
+            refill_used: await this.state.storage.get(`member_${id}_refill_used`),
+            is_donator: energyMax > 100
+          };
         }
       }
 
@@ -497,17 +512,45 @@ export class ChainMonitor implements DurableObject {
       await this.state.storage.put('chain_timeout', this.lastChainTimeout);
       await this.state.storage.put('hpm_history', this.hpmHistory);
       await this.state.storage.put('last_rtt', this.lastRTT);
-      
-      this.broadcastToWebSockets({ 
-        type: 'HEARTBEAT', 
-        lastUpdatedAt: this.lastUpdatedAt, 
+
+      // 🚀 连锁复盘数据生成 (每 5 分钟转存一次 D1)
+      let intervalCounter = (await this.state.storage.get<number>('interval_counter')) || 0;
+      intervalCounter++;
+
+      if (intervalCounter >= 30) { // 30 * 10s = 300s = 5m
+        try {
+          await this.env.DB.prepare(`
+            INSERT INTO ChainHistory (faction_id, timestamp, chain_count, hpm, eta, recent_hpm, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            this.factionId,
+            Date.now(),
+            this.lastChainCurrent,
+            currentHPM,
+            currentHPM > 0 ? Math.max(0, (await this.state.storage.get<number>('chain_max') || 10) - this.lastChainCurrent) / currentHPM : -1,
+            recentHPM,
+            JSON.stringify({ hpmHistory: this.hpmHistory })
+          ).run();
+
+          intervalCounter = 0;
+          this.microLogs.push({ ts: Date.now(), msg: '📊 Snapshot persisted to history' });
+        } catch (dbErr: any) {
+          console.error('[DO] DB Persistence failed:', dbErr);
+        }
+      }
+      await this.state.storage.put('interval_counter', intervalCounter);
+
+      this.broadcastToWebSockets({
+        type: 'HEARTBEAT',
+        lastUpdatedAt: this.lastUpdatedAt,
         do_server_time_ms: Date.now(),
         microLogs: this.microLogs,
         hpm: currentHPM,
         recentHPM,
         trend: recentHPM > currentHPM ? 'UP' : (recentHPM < currentHPM ? 'DOWN' : 'STABLE'),
         eta: currentHPM > 0 ? Math.max(0, (await this.state.storage.get<number>('chain_max') || 10) - this.lastChainCurrent) / currentHPM : -1,
-        aggregate
+        aggregate,
+        master_switch: await this.state.storage.get('master_switch') || 'OFF'
       });
 
     } catch (err: any) {
@@ -520,7 +563,7 @@ export class ChainMonitor implements DurableObject {
     const websockets = this.state.getWebSockets();
     const message = JSON.stringify(payload);
     websockets.forEach(ws => {
-      try { ws.send(message); } catch (e) {}
+      try { ws.send(message); } catch (e) { }
     });
   }
 

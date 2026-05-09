@@ -1,4 +1,4 @@
-import { createEmergencyAlert, createMilestoneAlert } from '../utils/embed_templates'
+import { createEmergencyAlert, createMilestoneAlert, createStatusEmbed } from '../utils/embed_templates'
 import type { Env } from '../index'
 
 export class DiscordWebhookService {
@@ -37,6 +37,12 @@ export class DiscordWebhookService {
 
   async sendEmergencyAlert(timeoutSeconds: number, roleId?: string) {
     const payload = createEmergencyAlert(timeoutSeconds, roleId);
+    return await this.sendWebhook(payload);
+  }
+
+  async sendChainAlert(factionName: string, chainCurrent: number, timeout: number, hpm: number) {
+    const payload = createStatusEmbed(chainCurrent, 10000, timeout, hpm);
+    payload.embeds[0].title = `🚨 EMERGENCY: ${factionName} Chain Risk!`;
     return await this.sendWebhook(payload);
   }
 
