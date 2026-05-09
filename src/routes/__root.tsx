@@ -10,13 +10,15 @@ export const Route = createRootRoute({
       {/* Header / Navigation */}
       <header className="sticky top-0 z-50 glass-panel border-b border-white/5 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-linear-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <span className="text-zinc-950 font-black text-lg">T</span>
-            </div>
+          <div className="flex items-center gap-3">
+            <img 
+              src="/logo.avif" 
+              alt="Logo" 
+              className="w-9 h-9 rounded-lg object-cover border border-white/10"
+            />
             <div className="flex flex-col">
               <span className="text-sm font-black tracking-tighter uppercase leading-none text-zinc-100">TCT Chain</span>
-              <span className="text-[10px] text-amber-500/80 font-bold uppercase tracking-widest leading-none">Intelligence</span>
+              <span className="text-[10px] text-amber-500/80 font-bold uppercase tracking-widest leading-none mt-1">Intelligence</span>
             </div>
           </div>
 
@@ -40,7 +42,7 @@ export const Route = createRootRoute({
         </p>
       </footer>
 
-      <TanStackRouterDevtools />
+
       <Toaster 
         position="bottom-right"
         toastOptions={{
