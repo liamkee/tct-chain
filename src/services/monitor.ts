@@ -12,7 +12,7 @@ export class ChainMonitor implements DurableObject {
   private factionId: string | null = null;
   private commanderKeyCache: string | null = null;
   private lastChainCurrent: number = 0;
-  private lastChainTimeout: number = 0;
+  private lastChainTimeout: number = 300;
   private lastChainMax: number = 10;
   private lastChainDeadlineMs: number = 0;
   private memberStatusCache: Map<string, string> = new Map(); // id -> stringified status
@@ -64,7 +64,7 @@ export class ChainMonitor implements DurableObject {
       // Restore chain state (1 key instead of 4)
       const chain = storedMap.get('chain_state') ?? {};
       this.lastChainCurrent = Math.max(0, chain.current ?? 0);
-      this.lastChainTimeout = Math.max(0, chain.timeout ?? 0);
+      this.lastChainTimeout = Math.max(0, chain.timeout ?? 300);
       this.lastChainMax = Math.max(10, chain.max ?? 10);
       this.lastChainDeadlineMs = chain.deadline_ms ?? 0;
 

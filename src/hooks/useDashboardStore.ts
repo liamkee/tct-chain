@@ -41,15 +41,13 @@ interface DashboardState {
     memberCount: number;
   } | null;
 
-  // UI 状态
   isConnected: boolean;
   isStale: boolean;
-  viewMode: 'grid' | 'list';
   filters: {
     hideOffline: boolean;
     hideHospital: boolean;
     hideTraveling: boolean;
-    sortBy: 'name' | 'status' | 'activity' | 'power' | 'none';
+    sortBy: 'name' | 'status' | 'activity' | 'power' | 'refill' | 'none';
     sortOrder: 'asc' | 'desc';
   };
   
@@ -59,8 +57,8 @@ interface DashboardState {
   updateChain: (updates: any) => void;
   setSquad: (members: string[]) => void;
   setConnection: (status: boolean) => void;
+  setStale: (status: boolean) => void;
   setTarget: (val: number) => void;
-  setViewMode: (mode: 'grid' | 'list') => void;
   toggleFilter: (key: keyof DashboardState['filters']) => void;
   setSort: (key: DashboardState['filters']['sortBy']) => void;
   addLog: (log: { ts: number, msg: string }) => void;
@@ -69,7 +67,7 @@ interface DashboardState {
 
 export const useDashboardStore = create<DashboardState>((set) => ({
   members: {},
-  chain: { current: 0, max: 10, timeout: 0, deadline: 0 },
+  chain: { current: 0, max: 10, timeout: 300, deadline: 0 },
   globalSelectedMembers: [],
   microLogs: [],
   lastUpdatedAt: 0,
@@ -82,13 +80,12 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   tacticalAggregate: null,
   isConnected: false,
   isStale: false,
-  viewMode: 'list',
   filters: {
     hideOffline: false,
     hideHospital: false,
     hideTraveling: false,
-    sortBy: 'none',
-    sortOrder: 'asc',
+    sortBy: 'activity',
+    sortOrder: 'desc',
   },
 
   setFullSnapshot: (payload) => set((state) => {
@@ -157,10 +154,10 @@ export const useDashboardStore = create<DashboardState>((set) => ({
 
   setSquad: (members) => set({ globalSelectedMembers: members }),
   setConnection: (status) => set({ isConnected: status }),
+  setStale: (status) => set({ isStale: status }),
   setTarget: (val: number) => set((state) => ({ 
     chain: { ...state.chain, max: val } 
   })),
-  setViewMode: (mode) => set({ viewMode: mode }),
   toggleFilter: (key) => set((state) => ({
     filters: { ...state.filters, [key]: !state.filters[key] }
   })),
