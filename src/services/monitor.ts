@@ -313,6 +313,9 @@ export class ChainMonitor implements DurableObject {
         return;
       }
 
+      // Fetch DB members once to avoid scope issues and redundant calls
+      const dbMembers = await this.env.DB.prepare('SELECT torn_id, name, api_key FROM Members WHERE faction_id = ? AND api_key IS NOT NULL').bind(this.factionId).all();
+
       let switchState = await this.state.storage.get<string>('master_switch');
       if (!switchState) {
         switchState = 'ON'; 
@@ -335,10 +338,10 @@ export class ChainMonitor implements DurableObject {
         if (!this.commanderKeyCache) {
           // 在多租户模式下，如果没有 Faction 表，我们可以尝试从 DB 里的成员中随便选一个有效 Key
           // 或者要求每个 Faction 必须有一个 Commander Key
-          const dbMembers = await this.env.DB.prepare('SELECT api_key FROM Members WHERE faction_id = ? AND api_key IS NOT NULL LIMIT 1').bind(this.factionId).first() as any;
-          if (dbMembers?.api_key) {
+          const firstWithKey = dbMembers.results[0] as any;
+          if (firstWithKey?.api_key) {
              const security = new (await import('../services/security')).SecurityService(this.env.ENCRYPTION_SECRET);
-             this.commanderKeyCache = await security.decrypt(dbMembers.api_key);
+             this.commanderKeyCache = await security.decrypt(firstWithKey.api_key);
           }
         }
 
@@ -450,7 +453,6 @@ export class ChainMonitor implements DurableObject {
         }
 
         // 🚀 核心调度逻辑 (仅本帮派成员)
-        const dbMembers = await this.env.DB.prepare('SELECT torn_id, api_key FROM Members WHERE faction_id = ? AND api_key IS NOT NULL').bind(this.factionId).all();
         const activeMemberKeys = new Map(dbMembers.results.map((m: any) => [m.torn_id.toString(), m.api_key]));
 
         const membersToUpdate = Object.keys(membersData).filter(id => {
