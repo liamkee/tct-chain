@@ -9,7 +9,7 @@ export const MemberGrid: React.FC = () => {
   const processedMembers = Object.values(members)
     .filter(m => {
       // Only filter based on explicit UI toggles (Offline/Hospital/Traveling)
-      
+
       if (filters.hideOffline && m.last_action?.status !== 'Online') return false;
       if (filters.hideHospital && m.status?.state === 'Hospital') return false;
       if (filters.hideTraveling && m.status?.state === 'Traveling') return false;
@@ -132,38 +132,11 @@ export const MemberGrid: React.FC = () => {
       {controls}
       {viewMode === 'list' ? (
         <div className="flex flex-col gap-1 p-2 md:p-4">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5">
-            <button 
-              onClick={() => setSort('name')}
-              className={`col-span-3 text-left hover:text-zinc-100 transition-colors flex items-center gap-1 ${filters.sortBy === 'name' ? 'text-indigo-400' : ''}`}
-            >
-              Personnel {getSortIcon('name')}
-            </button>
-            <button 
-              onClick={() => setSort('status')}
-              className={`col-span-2 text-left hover:text-zinc-100 transition-colors flex items-center gap-1 ${filters.sortBy === 'status' ? 'text-indigo-400' : ''}`}
-            >
-              Life Status {getSortIcon('status')}
-            </button>
-            <button 
-              onClick={() => setSort('activity')}
-              className={`col-span-2 text-left hover:text-zinc-100 transition-colors flex items-center gap-1 ${filters.sortBy === 'activity' ? 'text-indigo-400' : ''}`}
-            >
-              Activity {getSortIcon('activity')}
-            </button>
-            <button 
-              onClick={() => setSort('power')}
-              className={`col-span-3 text-left hover:text-zinc-100 transition-colors flex items-center gap-1 ${filters.sortBy === 'power' ? 'text-indigo-400' : ''}`}
-            >
-              Energy {getSortIcon('power')}
-            </button>
-            <div className="col-span-2 text-right">Cooldowns</div>
-          </div>
+
           {processedMembers.map((member) => (
-            <MemberRow 
-              key={member.id} 
-              member={member} 
+            <MemberRow
+              key={member.id}
+              member={member}
               isSelected={globalSelectedMembers.includes(member.id)}
             />
           ))}
@@ -171,9 +144,9 @@ export const MemberGrid: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4 p-2 md:p-4">
           {processedMembers.map((member) => (
-            <MemberCard 
-              key={member.id} 
-              member={member} 
+            <MemberCard
+              key={member.id}
+              member={member}
               isSelected={globalSelectedMembers.includes(member.id)}
             />
           ))}
@@ -187,8 +160,8 @@ const FilterButton: React.FC<{ active: boolean, onClick: () => void, label: stri
   <button
     onClick={onClick}
     className={`px-3 py-1.5 rounded-md text-[10px] font-black tracking-tighter transition-all border ${active
-        ? 'bg-indigo-500 text-white border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
-        : 'bg-zinc-800/50 text-zinc-500 border-white/5 hover:border-white/20'
+      ? 'bg-indigo-500 text-white border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
+      : 'bg-zinc-800/50 text-zinc-500 border-white/5 hover:border-white/20'
       }`}
   >
     {label}
@@ -196,14 +169,14 @@ const FilterButton: React.FC<{ active: boolean, onClick: () => void, label: stri
 );
 
 const MemberCard: React.FC<{ member: any, isSelected: boolean }> = ({ member, isSelected }) => {
-  const statusColor = member.status?.state === 'Okay' ? 'bg-emerald-500' : 
-                     member.status?.state === 'Hospital' ? 'bg-rose-500' : 'bg-amber-500';
+  const statusColor = member.status?.state === 'Okay' ? 'bg-emerald-500' :
+    member.status?.state === 'Hospital' ? 'bg-rose-500' : 'bg-amber-500';
 
   return (
     <div className={`relative group overflow-hidden rounded-xl border border-white/10 bg-zinc-900/50 p-4 transition-all hover:bg-zinc-800/80 ${isSelected ? 'ring-2 ring-indigo-500' : ''}`}>
       {/* 玻璃拟态装饰 */}
       <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-indigo-500/10 blur-3xl group-hover:bg-indigo-500/20 transition-colors" />
-      
+
       <div className="flex items-center justify-between mb-3">
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
@@ -219,8 +192,8 @@ const MemberCard: React.FC<{ member: any, isSelected: boolean }> = ({ member, is
             <span>{member.last_action?.status}</span>
             {member.last_action?.status !== 'Online' && member.last_action?.seconds !== undefined && (
               <span className="text-zinc-600 text-[8px]">
-                {member.last_action.seconds > 3600 
-                  ? `${Math.floor(member.last_action.seconds / 3600)}h ago` 
+                {member.last_action.seconds > 3600
+                  ? `${Math.floor(member.last_action.seconds / 3600)}h ago`
                   : `${Math.floor(member.last_action.seconds / 60)}m ago`}
               </span>
             )}
@@ -235,7 +208,7 @@ const MemberCard: React.FC<{ member: any, isSelected: boolean }> = ({ member, is
           <span>{member.energy || 0} / {member.energy_max || 100}</span>
         </div>
         <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-          <div 
+          <div
             className="h-full bg-linear-to-r from-indigo-500 to-cyan-400 transition-all duration-1000 ease-out"
             style={{ width: `${((member.energy || 0) / (member.energy_max || 100)) * 100}%` }}
           />
@@ -276,11 +249,11 @@ const MemberCard: React.FC<{ member: any, isSelected: boolean }> = ({ member, is
 };
 
 const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isSelected }) => {
-  const statusColor = member.status?.state === 'Okay' ? 'text-emerald-400' : 
-                     member.status?.state === 'Hospital' ? 'text-rose-400' : 'text-amber-400';
-  
-  const onlineColor = member.last_action?.status === 'Online' ? 'text-green-400' : 
-                     member.last_action?.status === 'Idle' ? 'text-amber-400' : 'text-zinc-500';
+  const statusColor = member.status?.state === 'Okay' ? 'text-emerald-400' :
+    member.status?.state === 'Hospital' ? 'text-rose-400' : 'text-amber-400';
+
+  const onlineColor = member.last_action?.status === 'Online' ? 'text-green-400' :
+    member.last_action?.status === 'Idle' ? 'text-amber-400' : 'text-zinc-500';
 
   return (
     <div className={`grid grid-cols-12 gap-4 items-center px-4 py-2 rounded-lg border border-white/5 bg-zinc-900/30 hover:bg-zinc-800/50 transition-all ${isSelected ? 'ring-1 ring-indigo-500 bg-indigo-500/5' : ''}`}>
@@ -301,8 +274,8 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isS
         <span className={`text-[10px] font-black uppercase tracking-wider ${onlineColor}`}>{member.last_action?.status}</span>
         {member.last_action?.status !== 'Online' && (
           <span className="text-zinc-600 text-[9px] ml-2 font-mono">
-            {member.last_action?.seconds && member.last_action.seconds > 3600 
-              ? `${Math.floor(member.last_action.seconds / 3600)}h` 
+            {member.last_action?.seconds && member.last_action.seconds > 3600
+              ? `${Math.floor(member.last_action.seconds / 3600)}h`
               : `${Math.floor((member.last_action?.seconds || 0) / 60)}m`}
           </span>
         )}
@@ -311,7 +284,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isS
       {/* Energy */}
       <div className="col-span-3 flex items-center gap-3">
         <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-          <div 
+          <div
             className="h-full bg-linear-to-r from-indigo-500 to-cyan-400 transition-all duration-1000"
             style={{ width: `${((member.energy || 0) / (member.energy_max || 100)) * 100}%` }}
           />
@@ -339,8 +312,8 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isS
           </div>
         )}
         <div className={`w-6 h-6 rounded flex items-center justify-center text-[8px] font-bold border transition-all ${member.refill_used
-            ? 'bg-zinc-800 border-white/5 text-zinc-600'
-            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.1)]'
+          ? 'bg-zinc-800 border-white/5 text-zinc-600'
+          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.1)]'
           }`} title={member.refill_used ? 'Refill Used' : 'Refill Ready'}>
           R
         </div>

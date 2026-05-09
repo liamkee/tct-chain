@@ -201,13 +201,13 @@ function DashboardContent() {
         {/* Connecting State */}
         {!isConnected && (
           <div className="absolute inset-0 z-60 flex items-center justify-center bg-black/40 backdrop-blur-sm mx-3 md:mx-4 my-6 rounded-3xl">
-             <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-                <span className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Establishing Uplink...</span>
-             </div>
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+              <span className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Establishing Uplink...</span>
+            </div>
           </div>
         )}
-        
+
         <div className={masterSwitch === 'OFF' ? 'opacity-20 grayscale pointer-events-none transition-all duration-700' : 'transition-all duration-700'}>
           <div className="px-3 md:px-4 mb-6">
             <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-wrap gap-8 items-center justify-between">

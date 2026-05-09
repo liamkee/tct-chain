@@ -20,12 +20,7 @@ export const Route = createRootRoute({
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-1">
-            <NavLink to="/">Overview</NavLink>
-            <NavLink to="/dashboard">Tactical</NavLink>
-            <NavLink to="/members">Personnel</NavLink>
-            <NavLink to="/settings">Configs</NavLink>
-          </nav>
+
         </div>
 
         <div className="flex items-center gap-4">
@@ -76,11 +71,13 @@ function AuthHeaderActions() {
 
   return (
     <div className="flex items-center gap-4">
-      <button 
+      <button
         onClick={logout}
-        className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-rose-500 transition-colors"
+        className="min-w-[120px] flex items-center justify-center px-5 py-2.5 rounded-xl bg-zinc-900 border border-white/10 hover:border-zinc-100/30 hover:bg-zinc-800 transition-all duration-300"
       >
-        Disconnect
+        <span className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-400 hover:text-zinc-100 transition-colors leading-none">
+          Disconnect
+        </span>
       </button>
     </div>
   )
