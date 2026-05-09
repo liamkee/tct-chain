@@ -319,12 +319,6 @@ export class ChainMonitor implements DurableObject {
       return new Response('System Started');
     }
 
-    if (url.pathname === '/internal/clear') {
-      await this.state.storage.deleteAll();
-      this.memberStatusCache.clear();
-      this.memberMinutesCache.clear();
-      return new Response('Storage Cleared');
-    }
 
     return new Response('Not Found', { status: 404 });
   }

@@ -23,15 +23,6 @@ export const DashboardControls: React.FC = () => {
     }
   };
 
-  const handleClear = async () => {
-    if (confirm('WIPE ALL CACHED DATA? This clears personnel snapshots and logs.')) {
-      const toastId = toast.loading('Wiping Cache...');
-      await fetch('/api/dashboard/clear');
-      toast.success('Cache Purged', { id: toastId });
-      setTimeout(() => window.location.reload(), 500);
-    }
-  };
-
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 p-3 md:p-4 bg-zinc-950/30">
       {/* 引擎控制 */}
@@ -49,13 +40,6 @@ export const DashboardControls: React.FC = () => {
           </span>
           {/* Subtle background glow */}
           <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity blur-xl ${masterSwitch === 'ON' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`} />
-        </button>
-
-        <button
-          onClick={handleClear}
-          className="px-4 py-2 rounded-xl bg-zinc-900/50 border border-white/5 text-zinc-500 text-[10px] font-bold hover:bg-zinc-800 hover:text-zinc-300 transition-all active:scale-95 uppercase tracking-tighter"
-        >
-          Purge Cache
         </button>
       </div>
 
