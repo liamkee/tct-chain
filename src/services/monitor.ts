@@ -1,3 +1,4 @@
+// Tactical Engine - v1.3.2 - Stable Sync
 import type { Env } from '../index'
 import { DiscordWebhookService } from './discord_webhook'
 import { TacticalCalculator } from './calculator'
@@ -513,6 +514,11 @@ export class ChainMonitor implements DurableObject {
         // 8. Final Broadcast
         this.lastUpdatedAt = Date.now();
         const fullSnapshot = await this.getFullSnapshot();
+
+        // 🚀 添加心跳日誌到 Ops Stream，讓用戶看到引擎在動
+        this.microLogs.push({ ts: Date.now(), msg: `Scan cycle complete: ${Object.keys(membersData).length} members synced.` });
+        if (this.microLogs.length > 20) this.microLogs.shift();
+
         this.broadcastToWebSockets({
           type: 'HEARTBEAT',
           data: fullSnapshot

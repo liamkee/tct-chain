@@ -142,7 +142,7 @@ export class TacticalCalculator {
     const { energy, energy_max, is_donator, refill_used } = member;
     let total = energy || 0;
     
-    // 如果 Refill 没用过，计入一次
+    // 如果 Refill 沒用過，計入一次
     if (!refill_used) {
       total += getItemEnergy(TORN_ITEMS.REFILL, is_donator, energy_max);
     }
@@ -150,49 +150,44 @@ export class TacticalCalculator {
   }
 
   /**
-   * 计算单个成员的即战力 (Current Available)
+   * 計算單個成員的即戰力 (Current Available)
+   * 修正：離線成員如果沒住院，其現有能量也應算作即時戰力
    */
   static calculatePotential(member: MemberTacticalData) {
-    const { energy_max, is_donator, last_action, status } = member;
+    const { energy_max, is_donator, status } = member;
     
-    // 1. 判断是否“可出击”
-    // Offline can still hit if they just went offline, but usually we consider them unavailable
-    // Hospital is definitely unavailable
-    const isAvailable = last_action.status !== 'Offline' && status.state === 'Okay';
+    // 1. 判斷是否“可出擊”：只要沒住院、沒坐牢、沒旅遊，能量就是隨時可用的
+    const isTacticallyAvailable = !['Hospital', 'Jail', 'Traveling'].includes(status.state);
     
-    // 2. 计算当前即战力
-    const totalEnergy = this.getBaseAvailableEnergy(member);
-    const availableHits = Math.floor(totalEnergy / TORN_RULES.ENERGY_PER_HIT);
+    // 2. 計算當前能量 (不含資源)
+    const currentEnergy = member.energy || 0;
+    const availableHits = Math.floor(currentEnergy / TORN_RULES.ENERGY_PER_HIT);
     
     return {
-      isAvailable,
+      isAvailable: isTacticallyAvailable,
       availableHits,
       maxEnergy: energy_max || (is_donator ? TORN_RULES.BASE_ENERGY_DONATOR : TORN_RULES.BASE_ENERGY_NORMAL)
     };
   }
 
   /**
-   * 极限战力推演 (Max Potential Prediction) - 即时爆种
+   * 爆發力推演 (Burst Potential) - 現有 + Refill + 1 Xanax
+   * 不再計算 FHC，因為那不是常規戰術參考
    */
-  static predictMaxPotential(member: MemberTacticalData) {
-    const { energy_max, cooldowns, is_donator } = member;
-    let totalEnergy = this.getBaseAvailableEnergy(member);
-
-    // Booster (FHC) 推演
-    let tempBoosterCD = cooldowns?.booster || 0;
-    let fhcCount = 0;
-    while (tempBoosterCD < TORN_RULES.BOOSTER_MAX_MINUTES) {
-      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy_max);
-      tempBoosterCD += TORN_ITEMS.FHC.cooldown.base;
-      fhcCount++;
-      if (tempBoosterCD === TORN_RULES.BOOSTER_MAX_MINUTES) {
-        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy_max);
-        fhcCount++;
-        break;
-      }
+  static predictBurstPotential(member: MemberTacticalData) {
+    const { energy_max, cooldowns, is_donator, status } = member;
+    if (['Hospital', 'Jail', 'Traveling'].includes(status.state)) {
+      return { totalPotentialEnergy: 0, maxPotentialHits: 0 };
     }
 
-    // Drug (Xanax) 推演
+    let totalEnergy = member.energy || 0;
+
+    // 1. Refill
+    if (!member.refill_used) {
+      totalEnergy += getItemEnergy(TORN_ITEMS.REFILL, is_donator, energy_max);
+    }
+
+    // 2. Xanax (如果沒 CD)
     let xanaxCount = 0;
     if ((cooldowns?.drug || 0) === 0) {
       totalEnergy += getItemEnergy(TORN_ITEMS.XANAX, is_donator);
@@ -203,7 +198,6 @@ export class TacticalCalculator {
       totalPotentialEnergy: totalEnergy,
       maxPotentialHits: Math.floor(totalEnergy / TORN_RULES.ENERGY_PER_HIT),
       resourcesUsed: {
-        fhc: fhcCount,
         xanax: xanaxCount,
         refill: !member.refill_used
       }
@@ -211,17 +205,16 @@ export class TacticalCalculator {
   }
 
   /**
-   * 动态时间轴战力预测 (Time-Aware Potential Prediction)
-   * 计算在未来 targetMinutes 分钟内，该成员理论上能提供的最大击数。
+   * 動態時間軸戰力預測 (Time-Aware Potential Prediction)
+   * 修正：不再計算 FHC，只計算自然回能 + 1次 Xanax (如果CD到)
    */
   static predictPotentialOverTime(member: MemberTacticalData, targetMinutes: number) {
-    const { energy_max, cooldowns, is_donator, status } = member;
+    const { cooldowns, is_donator, status } = member;
     
-    // 1. 基础可用能量 (当前 + 未使用的 Refill)
-    let totalEnergy = this.getBaseAvailableEnergy(member);
+    // 1. 基礎可用能量 (當前，不含 Refill)
+    let totalEnergy = member.energy || 0;
 
-    // 2. 自然回复 (Regen)
-    // If in hospital, they don't gain energy until they are out.
+    // 2. 自然回能 (Regen)
     const now = Math.floor(Date.now() / 1000);
     const hospRemainingSeconds = Math.max(0, (status.until || 0) - now);
     const hospRemainingMinutes = Math.ceil(hospRemainingSeconds / 60);
@@ -231,24 +224,9 @@ export class TacticalCalculator {
     const totalRegenEnergy = Math.floor(effectiveRegenMinutes / regenInterval) * TORN_RULES.REGEN_AMOUNT;
     totalEnergy += totalRegenEnergy;
 
-    // 3. 资源释放推演 (随着时间流逝，CD 会下降)
-    let effectiveBoosterCD = Math.max(0, (cooldowns?.booster || 0) - targetMinutes);
-    let fhcCount = 0;
-    while (effectiveBoosterCD < TORN_RULES.BOOSTER_MAX_MINUTES) {
-      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy_max);
-      effectiveBoosterCD += TORN_ITEMS.FHC.cooldown.base;
-      fhcCount++;
-      if (effectiveBoosterCD === TORN_RULES.BOOSTER_MAX_MINUTES) {
-        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy_max);
-        fhcCount++;
-        break;
-      }
-    }
-
-    let xanaxCount = 0;
-    if ((cooldowns?.drug || 0) <= targetMinutes) {
+    // 3. 資源釋放推演 (只計算 Xanax)
+    if ((cooldowns?.drug || 0) <= targetMinutes * 60) {
       totalEnergy += getItemEnergy(TORN_ITEMS.XANAX, is_donator);
-      xanaxCount++;
     }
 
     return {
@@ -259,12 +237,12 @@ export class TacticalCalculator {
   }
 
   /**
-   * 聚合全帮派战力数据
+   * 聚合全幫派戰力數據
    */
   static aggregate(members: Record<string, any>, selectedIds?: string[]) {
     let totalAvailableHits = 0;
-    let totalMaxPotentialHits = 0;
-    let totalProjectedHits1h = 0; // 新增：1小时预测
+    let totalBurstHits = 0; // 改名：Burst Potential
+    let totalProjectedHits1h = 0;
     
     const targetMembers = selectedIds && selectedIds.length > 0 
       ? Object.entries(members).filter(([id]) => selectedIds.includes(id))
@@ -272,11 +250,11 @@ export class TacticalCalculator {
 
     targetMembers.forEach(([_, data]) => {
       const memberData = data as MemberTacticalData;
-      const current = this.calculatePotential(memberData);
-      const predictedMax = this.predictMaxPotential(memberData);
-      const projected1h = this.predictPotentialOverTime(memberData, 60);
+      const current = TacticalCalculator.calculatePotential(memberData);
+      const burst = TacticalCalculator.predictBurstPotential(memberData);
+      const projected1h = TacticalCalculator.predictPotentialOverTime(memberData, 60);
       
-      totalMaxPotentialHits += predictedMax.maxPotentialHits;
+      totalBurstHits += burst.maxPotentialHits;
       totalProjectedHits1h += projected1h.potentialHits;
       if (current.isAvailable) {
         totalAvailableHits += current.availableHits;
@@ -285,7 +263,7 @@ export class TacticalCalculator {
 
     return {
       totalAvailableHits,
-      totalMaxPotentialHits,
+      totalMaxPotentialHits: totalBurstHits, // 保持 Key 名不變，以免前端崩潰
       totalProjectedHits1h,
       memberCount: targetMembers.length
     };

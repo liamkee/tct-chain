@@ -165,12 +165,16 @@ function DashboardContent() {
 
           <div className="hidden xl:flex flex-col items-end">
             <span className="text-[10px] text-zinc-500 font-bold uppercase mb-1 text-right">Ops Stream</span>
-            <div className="h-8 overflow-hidden text-[10px] font-mono text-zinc-400 text-right">
+            <div className="h-12 overflow-hidden text-[10px] font-mono text-zinc-400 text-right flex flex-col justify-end">
               {microLogs.length > 0 ? (
-                <div className="animate-in slide-in-from-bottom duration-500">
-                  <span className="text-indigo-400">[{new Date(microLogs[0].ts).toLocaleTimeString()}]</span> {microLogs[0].msg}
-                </div>
-              ) : 'Link standby...'}
+                microLogs.slice(-3).map((log, i) => (
+                  <div key={log.ts + i} className="animate-in slide-in-from-bottom-1 duration-300">
+                    <span className="text-indigo-400/80">[{new Date(log.ts).toLocaleTimeString([], { hour12: false })}]</span> {log.msg}
+                  </div>
+                ))
+              ) : (
+                <div className="text-zinc-600 italic">Link standby...</div>
+              )}
             </div>
           </div>
         </div>
