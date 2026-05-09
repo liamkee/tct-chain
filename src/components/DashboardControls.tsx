@@ -14,7 +14,7 @@ export const DashboardControls: React.FC = () => {
       if (res.ok) {
         toast.success(`Engine ${action === 'start' ? 'Active' : 'Standby'}`, { id: toastId });
         // Use a slight delay before reload to let the user see the success message
-        setTimeout(() => window.location.reload(), 500);
+        // No reload needed! The WebSocket broadcast will update the UI instantly
       } else {
         toast.error('Tactical Uplink Failed', { id: toastId });
       }

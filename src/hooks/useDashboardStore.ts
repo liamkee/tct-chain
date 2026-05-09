@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 interface MemberData {
   id: string;
+  name: string;
   energy: number;
   energy_max: number;
   status: any;
@@ -61,7 +62,7 @@ interface DashboardState {
   setViewMode: (mode: 'grid' | 'list') => void;
   toggleFilter: (key: keyof DashboardState['filters']) => void;
   addLog: (log: { ts: number, msg: string }) => void;
-  setHeartbeat: (payload: any) => void; // 🚀 新增心跳处理
+  setHeartbeat: (payload: any) => void;
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
@@ -83,10 +84,10 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   filters: {
     hideOffline: false,
     hideHospital: false,
-    sortByPower: true,
+    sortByPower: false, // 🚀 默认关闭排序，确保所有人立即可见
   },
 
-  setFullSnapshot: (payload) => {
+  setFullSnapshot: (payload) => set((state) => {
     const data = payload.data || payload; 
     const members: Record<string, any> = {};
     const logs = data.microLogs || data.micro_logs || [];
@@ -94,39 +95,31 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     const offset = doTime - Date.now();
 
     const chain = {
-      current: data.chain_current || data.status?.chainCurrent || 0,
-      timeout: data.chain_timeout || data.status?.chainTimeout || 0,
-      deadline: data.chain_deadline_ms || (Date.now() + offset + (data.chain_timeout || data.status?.chainTimeout || 0) * 1000),
+      current: data.chain_current || 0,
+      timeout: data.chain_timeout || 0,
+      deadline: data.chain_deadline_ms || (Date.now() + offset + (data.chain_timeout || 0) * 1000),
       max: data.chain_max || 10,
-      target: data.chain_target || 0
+      target: data.chain_target || 100
     };
 
-    const memberSource = data.members || data;
-    
-    // First, collect all unique member IDs
-    const memberIds = new Set<string>();
-    Object.keys(memberSource).forEach(key => {
-      if (key.startsWith('member_')) {
-        const id = key.split('_')[1];
-        if (id) memberIds.add(id);
-      }
-    });
-
-    // Then, build member objects for each ID
-    memberIds.forEach(id => {
+    const memberSource = data.members || {};
+    Object.entries(memberSource).forEach(([id, memberData]: [string, any]) => {
       members[id] = {
         id,
-        name: memberSource[`member_${id}_name`] || 'Unknown',
-        status: memberSource[`member_${id}_status`],
-        last_action: memberSource[`member_${id}_last_action`],
-        energy: memberSource[`member_${id}_energy`] || 0,
-        energy_max: memberSource[`member_${id}_energy_max`] || 100,
-        refill_used: memberSource[`member_${id}_refill_used`] || false,
-        cooldowns: memberSource[`member_${id}_cooldowns`] || { drug: 0, medical: 0, booster: 0 },
+        name: memberData.name || 'Unknown',
+        status: memberData.status,
+        last_action: memberData.last_action,
+        energy: memberData.energy || 0,
+        energy_max: memberData.energy_max || 100,
+        refill_used: memberData.refill_used || false,
+        is_donator: memberData.is_donator || false,
+        cooldowns: memberData.cooldowns || { drug: 0, medical: 0, booster: 0 },
       };
     });
 
-    set({ 
+    console.log(`[Store] Snapshot: Received ${Object.keys(members).length} members. Switch: ${data.master_switch}`);
+
+    return { 
       members, 
       chain, 
       microLogs: logs,
@@ -134,8 +127,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       lastUpdatedAt: data.lastUpdatedAt || Date.now(),
       serverClockOffset: offset,
       masterSwitch: data.master_switch || 'OFF'
-    });
-  },
+    };
+  }),
 
   updateMember: (id, updates) => set((state) => ({
     members: {
@@ -160,38 +153,54 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   }),
 
   setSquad: (members) => set({ globalSelectedMembers: members }),
-  
   setConnection: (status) => set({ isConnected: status }),
-
   setTarget: (val: number) => set((state) => ({ 
     chain: { ...state.chain, target: val } 
   })),
-
   setViewMode: (mode) => set({ viewMode: mode }),
-
   toggleFilter: (key) => set((state) => ({
     filters: { ...state.filters, [key]: !state.filters[key] }
   })),
-
   addLog: (log) => set((state) => {
     const newLogs = [log, ...state.microLogs].slice(0, 20);
     return { microLogs: newLogs };
   }),
 
   setHeartbeat: (payload) => set((state) => {
-    const doTime = payload.do_server_time_ms || Date.now();
-    const offset = payload.do_server_time_ms ? doTime - Date.now() : state.serverClockOffset;
+    const data = payload.data || payload; 
+    const doTime = data.do_server_time_ms || Date.now();
+    const offset = data.do_server_time_ms ? doTime - Date.now() : state.serverClockOffset;
     
+    // 🚀 NEW: Also update members if present in heartbeat
+    const members = { ...state.members };
+    if (data.members) {
+      Object.entries(data.members).forEach(([id, m]: [string, any]) => {
+        members[id] = { ...members[id], ...m, id };
+      });
+    }
+
+    const chain = data.chain_current !== undefined ? {
+      current: data.chain_current,
+      timeout: data.chain_timeout || state.chain.timeout,
+      deadline: data.chain_deadline_ms || state.chain.deadline,
+      max: data.chain_max || state.chain.max,
+      target: data.chain_target || state.chain.target
+    } : state.chain;
+
+    console.log(`[Store] Heartbeat: Synced ${Object.keys(data.members || {}).length} members.`);
+
     return {
-      lastUpdatedAt: payload.lastUpdatedAt,
-      hpm: payload.hpm,
-      recentHPM: payload.recentHPM,
-      trend: payload.trend,
-      eta: payload.eta,
-      tacticalAggregate: payload.aggregate || state.tacticalAggregate,
-      microLogs: payload.microLogs || state.microLogs,
+      members,
+      chain,
+      lastUpdatedAt: data.lastUpdatedAt || state.lastUpdatedAt,
+      hpm: data.hpm || state.hpm,
+      recentHPM: data.recentHPM || state.recentHPM,
+      trend: data.trend || state.trend,
+      eta: data.eta || state.eta,
+      tacticalAggregate: data.aggregate || state.tacticalAggregate,
+      microLogs: data.microLogs || state.microLogs,
       serverClockOffset: offset,
-      masterSwitch: payload.master_switch || state.masterSwitch
+      masterSwitch: data.master_switch || state.masterSwitch
     };
   })
 }));

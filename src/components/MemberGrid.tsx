@@ -8,8 +8,7 @@ export const MemberGrid: React.FC = () => {
 
   const processedMembers = Object.values(members)
     .filter(m => {
-      // If Power First is on, only show members who have submitted an API key (have live data)
-      if (filters.sortByPower && (!m.last_action || m.energy === undefined)) return false;
+      // Only filter based on explicit UI toggles (Offline/Hospital)
       
       if (filters.hideOffline && m.last_action?.status !== 'Online') return false;
       if (filters.hideHospital && m.status?.state === 'Hospital') return false;

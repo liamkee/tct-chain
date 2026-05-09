@@ -46,8 +46,19 @@ function DashboardContent() {
   const eta = useDashboardStore((state) => state.eta);
   const tacticalAggregate = useDashboardStore((state) => state.tacticalAggregate);
   const serverClockOffset = useDashboardStore((state) => state.serverClockOffset);
+  const masterSwitch = useDashboardStore((state) => state.masterSwitch);
+  const lastUpdatedAt = useDashboardStore((state) => state.lastUpdatedAt);
   const [localTimeout, setLocalTimeout] = useState(chain.timeout);
   const requestRef = useRef<number>(0);
+
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick(t => t + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const animate = () => {
@@ -98,6 +109,9 @@ function DashboardContent() {
                 <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
                 <span className="text-sm font-semibold uppercase tracking-tight">
                   {isConnected ? 'Active' : 'Broken'}
+                </span>
+                <span className="text-[10px] text-zinc-600 font-mono ml-2 border-l border-white/10 pl-2">
+                  SCAN: {lastUpdatedAt > 0 ? `${Math.round((Date.now() + serverClockOffset - lastUpdatedAt) / 1000)}s` : 'WAIT'}
                 </span>
               </div>
             </div>
@@ -164,72 +178,99 @@ function DashboardContent() {
 
       <DashboardControls />
 
-      <main className="max-w-[1600px] mx-auto pt-4 px-2 md:px-0">
-        <div className="px-3 md:px-4 mb-6">
-          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-wrap gap-8 items-center justify-between">
-            <div className="flex gap-6 items-center">
-              <div>
-                <h4 className="text-sm font-bold text-zinc-200 uppercase tracking-widest">Tactical Projection</h4>
-                <p className="text-xs text-zinc-500 mt-0.5">Real-time resource simulation</p>
+      <main className="max-w-[1600px] mx-auto pt-4 px-2 md:px-0 relative">
+        {/* Engine Standby Overlay (Only show if definitely OFF and connected) */}
+        {isConnected && masterSwitch === 'OFF' && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/60 rounded-3xl border border-white/5 mx-3 md:mx-4 my-6">
+            <div className="text-center p-12">
+              <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-rose-500/20">
+                <div className="w-4 h-4 bg-rose-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.6)]" />
               </div>
+              <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">Tactical Engine Standby</h2>
+              <p className="text-zinc-400 max-w-md mx-auto text-sm font-medium">
+                The polling engine is currently offline. Turn on the Master Switch to resume real-time tactical monitoring.
+              </p>
             </div>
+          </div>
+        )}
 
-            <div className="flex gap-12">
-              <div className="text-center">
-                <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Instant Capacity</span>
-                <span className="text-xl font-mono font-black text-emerald-400">{tacticalAggregate?.totalAvailableHits || 0}</span>
-                <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
-              </div>
-              <div className="text-center">
-                <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">1h Predicted Output</span>
-                <span className="text-xl font-mono font-black text-indigo-400">{tacticalAggregate?.totalProjectedHits1h || 0}</span>
-                <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
-              </div>
-              <div className="text-center">
-                <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Theoretical Max</span>
-                <span className="text-xl font-mono font-black text-zinc-300">{tacticalAggregate?.totalMaxPotentialHits || 0}</span>
-                <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
-              </div>
-
-              <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
-
-              <div className="text-center relative">
-                <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Target Gap</span>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xl font-mono font-black ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-400' :
-                    (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-400' :
-                      (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-400' : 'text-rose-500'
-                    }`}>
-                    {Math.max(0, chain.target - chain.current)}
-                  </span>
-                  <div className="flex flex-col items-start leading-none">
-                    <span className="text-[8px] text-zinc-600 font-bold">REMAINING</span>
-                    <span className={`text-[9px] font-black uppercase ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-500' :
-                      (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-500' :
-                        (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-500' : 'text-rose-600'
-                      }`}>
-                      {(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'Overkill' :
-                        (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'Secured' :
-                          (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'Possible' : 'Shortfall'}
-                    </span>
-                  </div>
+        {/* Connecting State */}
+        {!isConnected && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm mx-3 md:mx-4 my-6 rounded-3xl">
+             <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                <span className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Establishing Uplink...</span>
+             </div>
+          </div>
+        )}
+        
+        <div className={masterSwitch === 'OFF' ? 'opacity-20 grayscale pointer-events-none transition-all duration-700' : 'transition-all duration-700'}>
+          <div className="px-3 md:px-4 mb-6">
+            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-wrap gap-8 items-center justify-between">
+              <div className="flex gap-6 items-center">
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-200 uppercase tracking-widest">Tactical Projection</h4>
+                  <p className="text-xs text-zinc-500 mt-0.5">Real-time resource simulation</p>
                 </div>
               </div>
 
-              <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
+              <div className="flex gap-12">
+                <div className="text-center">
+                  <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Instant Capacity</span>
+                  <span className="text-xl font-mono font-black text-emerald-400">{tacticalAggregate?.totalAvailableHits || 0}</span>
+                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+                </div>
+                <div className="text-center">
+                  <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">1h Predicted Output</span>
+                  <span className="text-xl font-mono font-black text-indigo-400">{tacticalAggregate?.totalProjectedHits1h || 0}</span>
+                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+                </div>
+                <div className="text-center">
+                  <span className="block text-[10px] text-zinc-500 font-bold uppercase mb-1">Theoretical Max</span>
+                  <span className="text-xl font-mono font-black text-zinc-300">{tacticalAggregate?.totalMaxPotentialHits || 0}</span>
+                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+                </div>
 
-              <div className="text-center">
-                <span className="block text-[10px] text-rose-500/80 font-bold uppercase mb-1">Buffer Safety</span>
-                <span className={`text-xl font-mono font-black ${localTimeout < 60 ? 'text-rose-500' : 'text-zinc-100'}`}>
-                  {Math.floor(hpm * (localTimeout / 60))}
-                </span>
-                <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+                <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
+
+                <div className="text-center relative">
+                  <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Target Gap</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xl font-mono font-black ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-400' :
+                      (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-400' :
+                        (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-400' : 'text-rose-500'
+                      }`}>
+                      {Math.max(0, chain.target - chain.current)}
+                    </span>
+                    <div className="flex flex-col items-start leading-none">
+                      <span className="text-[8px] text-zinc-600 font-bold">REMAINING</span>
+                      <span className={`text-[9px] font-black uppercase ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-500' :
+                        (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-500' :
+                          (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-500' : 'text-rose-600'
+                        }`}>
+                        {(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'Overkill' :
+                          (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'Secured' :
+                            (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'Possible' : 'Shortfall'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
+
+                <div className="text-center">
+                  <span className="block text-[10px] text-rose-500/80 font-bold uppercase mb-1">Buffer Safety</span>
+                  <span className={`text-xl font-mono font-black ${localTimeout < 60 ? 'text-rose-500' : 'text-zinc-100'}`}>
+                    {Math.floor(hpm * (localTimeout / 60))}
+                  </span>
+                  <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <MemberGrid />
+          <MemberGrid />
+        </div>
       </main>
 
       <div className="fixed inset-0 pointer-events-none z-[-1] opacity-50">

@@ -3,11 +3,9 @@ import { ApiManager } from '../services/api_manager'
 import { SecurityService } from '../services/security'
 
 export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): Promise<void> {
-  const switchState = await env.TCT_KV.get('SYSTEM_MASTER_SWITCH');
-  if (switchState !== 'ON') {
-    console.log('[Queue] Master Switch is OFF. Dropping batch.');
-    return;
-  }
+  // 🚀 FORCE UPDATE: No more master switch check here.
+  // We trust the messages coming from the Durable Object.
+  console.log(`[Queue] 🔥 BOOTING CONSUMER - Processing batch of ${batch.messages.length} messages. No more gatekeeping!`);
 
   const apiManager = new ApiManager(env);
   const security = new SecurityService(env.ENCRYPTION_SECRET);
@@ -54,33 +52,29 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
         return;
       }
 
-      console.log(`[Queue] Received task for ${tornId || 'UNKNOWN'} (Faction: ${factionId}). Attempts: ${message.attempts}`);
-
       if (!tornId) {
          console.error('[Queue] Error: Message body is empty or missing tornId:', message.body);
          message.ack();
          return;
       }
 
-      // 🚀 核心防护：旧请求消除逻辑 (Old Request Elimination)
-      if (ts && Date.now() - ts > 60000) {
+      // 🚀 Old Request Elimination (Max 2 mins age)
+      if (ts && Date.now() - ts > 120000) {
          console.log(`[Queue] Dropping stale message for ${tornId} (Age: ${Math.round((Date.now() - ts)/1000)}s)`);
          message.ack();
          return;
       }
 
       if (!keyTokens[apiKey]) {
-         apiManager.logAnalytics('rate_limit_block', tornId);
-         logBatch.push(`[LIMIT] Rate limit hit for ${tornId}. Re-queuing...`);
+         logBatch.push(`[LIMIT] Rate limit hit for ${tornId}.`);
          message.retry();
          return;
       }
 
       if (message.attempts > 3) {
-         console.log(`[Queue] ⚠️ Poison message for ${tornId}. Max retries exceeded. Marking key invalid.`);
-         apiManager.logAnalytics('poison_message', tornId);
-         logBatch.push(`[ALERT] Member ${tornId} failed multiple times. Key marked invalid.`);
-         await env.DB.prepare('UPDATE members SET api_key = NULL WHERE torn_id = ?').bind(tornId).run();
+         console.log(`[Queue] ⚠️ Poison message for ${tornId}. Max retries exceeded.`);
+         logBatch.push(`[ALERT] Member ${tornId} failed multiple times. Check API key.`);
+         message.ack(); // Avoid endless loop
          return;
       }
 
@@ -90,9 +84,6 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
          if (decrypted) rawApiKey = decrypted;
       }
 
-      // Only request what we CAN'T get from faction API.
-      // status & last_action already come from faction basic API (free).
-      // icons removed — refill detection uses refills data directly.
       let selections = 'bars,cooldowns,refills';
 
       try {
@@ -103,7 +94,6 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
           throw new Error(`Torn Error: ${data.error.error}`);
         }
 
-        // Derive energy_max from donator status (100 normal, 150 donator)
         const energyMax = data.energy?.maximum || 100;
         const isDonator = energyMax > 100;
 
@@ -114,11 +104,12 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
             energy_max: isDonator ? 150 : 100,
             is_donator: isDonator,
             cooldowns: data.cooldowns,
-            // status & last_action: NOT stored here — comes from faction API
             refill_used: data.refills ? data.refills.energy === false : false,
             last_updated: Math.floor(Date.now() / 1000)
           }
         });
+
+        message.ack();
 
       } catch (err: any) {
         console.error(`[Queue] Critical Error processing ${tornId}:`, err);

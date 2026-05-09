@@ -1,11 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { DashboardControls } from '../components/DashboardControls'
+import { useDashboardStore } from '../hooks/useDashboardStore'
 
 export const Route = createFileRoute('/settings')({
   component: Settings,
 })
 
 function Settings() {
+  const masterSwitch = useDashboardStore((state) => state.masterSwitch);
+  const isConnected = useDashboardStore((state) => state.isConnected);
+
   return (
     <div className="space-y-6">
       <div>
@@ -24,7 +28,9 @@ function Settings() {
           <div className="space-y-4">
             <div className="flex justify-between items-center py-2 border-b border-white/5">
               <span className="text-xs text-zinc-400">Master Switch</span>
-              <span className="text-xs font-mono text-emerald-500 font-bold">ONLINE</span>
+              <span className={`text-xs font-mono font-bold ${masterSwitch === 'ON' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {masterSwitch === 'ON' ? 'ONLINE' : 'OFFLINE'}
+              </span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-white/5">
               <span className="text-xs text-zinc-400">Polling Interval</span>
@@ -32,7 +38,9 @@ function Settings() {
             </div>
             <div className="flex justify-between items-center py-2 border-b border-white/5">
               <span className="text-xs text-zinc-400">Durable Object State</span>
-              <span className="text-xs font-mono text-indigo-400 font-bold">ACTIVE</span>
+              <span className={`text-xs font-mono font-bold ${isConnected ? 'text-indigo-400' : 'text-rose-500'}`}>
+                {isConnected ? 'ACTIVE' : 'DISCONNECTED'}
+              </span>
             </div>
           </div>
         </div>
