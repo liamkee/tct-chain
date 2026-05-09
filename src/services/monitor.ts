@@ -421,7 +421,14 @@ export class ChainMonitor implements DurableObject {
           return true;
         });
 
-        const memberMessages = membersToUpdate.map(id => ({ body: { tornId: id, apiKey: activeMemberKeys.get(id), ts: Date.now() }}));
+        const memberMessages = membersToUpdate.map(id => ({ 
+          body: { 
+            tornId: id, 
+            apiKey: activeMemberKeys.get(id), 
+            ts: Date.now(),
+            factionId: this.factionId 
+          }
+        }));
 
         if (memberMessages.length > 0) {
           for (let i = 0; i < memberMessages.length; i += 100) {

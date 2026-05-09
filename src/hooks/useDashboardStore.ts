@@ -97,21 +97,28 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     };
 
     const memberSource = data.members || data;
-    Object.entries(memberSource).forEach(([key, value]) => {
-      if (key.startsWith('member_') && key.endsWith('_status')) {
+    
+    // First, collect all unique member IDs
+    const memberIds = new Set<string>();
+    Object.keys(memberSource).forEach(key => {
+      if (key.startsWith('member_')) {
         const id = key.split('_')[1];
-        members[id] = {
-          ...members[id],
-          id,
-          name: memberSource[`member_${id}_name`], 
-          status: value,
-          last_action: memberSource[`member_${id}_last_action`],
-          energy: memberSource[`member_${id}_energy`],
-          energy_max: memberSource[`member_${id}_energy_max`],
-          refill_used: memberSource[`member_${id}_refill_used`],
-          cooldowns: memberSource[`member_${id}_cooldowns`],
-        };
+        if (id) memberIds.add(id);
       }
+    });
+
+    // Then, build member objects for each ID
+    memberIds.forEach(id => {
+      members[id] = {
+        id,
+        name: memberSource[`member_${id}_name`] || 'Unknown',
+        status: memberSource[`member_${id}_status`],
+        last_action: memberSource[`member_${id}_last_action`],
+        energy: memberSource[`member_${id}_energy`] || 0,
+        energy_max: memberSource[`member_${id}_energy_max`] || 100,
+        refill_used: memberSource[`member_${id}_refill_used`] || false,
+        cooldowns: memberSource[`member_${id}_cooldowns`] || { drug: 0, medical: 0, booster: 0 },
+      };
     });
 
     set({ 
