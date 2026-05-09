@@ -165,15 +165,12 @@ function DashboardContent() {
       <DashboardControls />
 
       <main className="max-w-[1600px] mx-auto pt-4 px-2 md:px-0">
-        <div className="px-4 md:px-6 mb-6">
+        <div className="px-3 md:px-4 mb-6">
           <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-wrap gap-8 items-center justify-between">
             <div className="flex gap-6 items-center">
-              <div className="h-12 w-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-2xl border border-indigo-500/20">
-                🔥
-              </div>
               <div>
                 <h4 className="text-sm font-bold text-zinc-200 uppercase tracking-widest">Tactical Projection</h4>
-                <p className="text-xs text-zinc-500 mt-0.5">Real-time resource simulation for Phase 3 deployment</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Real-time resource simulation</p>
               </div>
             </div>
 
@@ -193,7 +190,34 @@ function DashboardContent() {
                 <span className="text-xl font-mono font-black text-zinc-300">{tacticalAggregate?.totalMaxPotentialHits || 0}</span>
                 <span className="text-[10px] text-zinc-600 font-bold ml-1">HITS</span>
               </div>
+
               <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
+
+              <div className="text-center relative">
+                <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Target Gap</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xl font-mono font-black ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-400' :
+                    (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-400' :
+                      (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-400' : 'text-rose-500'
+                    }`}>
+                    {Math.max(0, chain.target - chain.current)}
+                  </span>
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="text-[8px] text-zinc-600 font-bold">REMAINING</span>
+                    <span className={`text-[9px] font-black uppercase ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-500' :
+                      (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-500' :
+                        (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-500' : 'text-rose-600'
+                      }`}>
+                      {(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'Overkill' :
+                        (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'Secured' :
+                          (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'Possible' : 'Shortfall'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
+
               <div className="text-center">
                 <span className="block text-[10px] text-rose-500/80 font-bold uppercase mb-1">Buffer Safety</span>
                 <span className={`text-xl font-mono font-black ${localTimeout < 60 ? 'text-rose-500' : 'text-zinc-100'}`}>

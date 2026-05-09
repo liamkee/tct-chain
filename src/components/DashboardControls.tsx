@@ -33,14 +33,14 @@ export const DashboardControls: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 p-3 md:p-4 border-b border-white/5 bg-zinc-950/30">
+    <div className="flex flex-wrap items-center justify-between gap-3 p-3 md:p-4 bg-zinc-950/30">
       {/* 引擎控制 */}
       <div className="flex flex-wrap items-center gap-2 md:gap-3">
         <button
           onClick={handleToggle}
           className={`group relative px-6 py-2 rounded-xl border transition-all active:scale-95 flex items-center gap-3 overflow-hidden ${masterSwitch === 'ON'
-              ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
-              : 'bg-rose-500/10 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 shadow-[0_0_20px_rgba(244,63,94,0.15)]'
+            ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
+            : 'bg-rose-500/10 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 shadow-[0_0_20px_rgba(244,63,94,0.15)]'
             }`}
         >
           <div className={`w-2 h-2 rounded-full animate-pulse ${masterSwitch === 'ON' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]'}`} />
@@ -67,7 +67,8 @@ export const DashboardControls: React.FC = () => {
           <input
             type="number"
             value={chain.target}
-            onChange={(e) => setTarget(parseInt(e.target.value) || 0)}
+            onChange={(e) => setTarget(Math.max(0, parseInt(e.target.value) || 0))}
+            min="0"
             className="w-16 bg-transparent text-sm font-black font-mono text-indigo-400 focus:outline-none border-b border-indigo-500/30 focus:border-indigo-500 text-center"
           />
         </div>
@@ -80,7 +81,7 @@ export const DashboardControls: React.FC = () => {
             placeholder="0"
             step="100"
             onBlur={async (e) => {
-              const val = parseInt(e.target.value) || 0;
+              const val = Math.max(0, parseInt(e.target.value) || 0);
               await fetch('/api/dashboard/offset', {
                 method: 'POST',
                 body: JSON.stringify({ offset: val })

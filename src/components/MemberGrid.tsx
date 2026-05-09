@@ -264,11 +264,12 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isS
             B
           </div>
         )}
-        {member.refill_used && (
-          <div className="w-6 h-6 rounded bg-zinc-800 border border-white/5 flex items-center justify-center text-[8px] font-bold text-zinc-600" title="Refill Used">
-            R
-          </div>
-        )}
+        <div className={`w-6 h-6 rounded flex items-center justify-center text-[8px] font-bold border transition-all ${member.refill_used
+            ? 'bg-zinc-800 border-white/5 text-zinc-600'
+            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.1)]'
+          }`} title={member.refill_used ? 'Refill Used' : 'Refill Ready'}>
+          R
+        </div>
       </div>
     </div>
   );
