@@ -190,6 +190,11 @@ auth.post('/bind', async (c) => {
     return c.json({ error: 'You must be in a faction to use this tool' }, 400)
   }
 
+  // Detect Role: Leaders and Co-leaders are automatically admins
+  const position = tornData.faction?.position || ''
+  const isLeader = position === 'Leader' || position === 'Co-leader'
+  const detectedRole = isLeader ? 'admin' : 'member'
+
   // Upsert Faction
   await db.insert(factions).values({
     id: factionId,
@@ -204,8 +209,9 @@ auth.post('/bind', async (c) => {
     await db.update(members).set({
       name,
       api_key: encryptedKey,
+      role: isLeader ? 'admin' : existing[0].role, // Upgrade to admin if leader, else keep existing
       faction_id: factionId,
-      discord_id: discordId || existing[0].discord_id // Keep existing discord_id if we don't have a new one
+      discord_id: discordId || existing[0].discord_id
     }).where(eq(members.torn_id, tornId))
   } else {
     await db.insert(members).values({
@@ -213,18 +219,20 @@ auth.post('/bind', async (c) => {
       discord_id: discordId,
       name,
       api_key: encryptedKey,
-      role: 'member',
+      role: detectedRole,
       is_donator: tornData.donator ? 1 : 0,
       faction_id: factionId
     })
   }
+
+  const finalRole = isLeader ? 'admin' : (existing.length > 0 ? existing[0].role : 'member')
 
   // Issue real token
   await setSessionCookie(c, {
     torn_id: tornId,
     discord_id: discordId,
     faction_id: factionId,
-    role: existing.length > 0 ? existing[0].role : 'member',
+    role: finalRole,
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30, // 30 days
   }, c.env.JWT_SECRET)
 

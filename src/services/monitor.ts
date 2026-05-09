@@ -198,7 +198,8 @@ export class ChainMonitor implements DurableObject {
          chain_max: await this.state.storage.get('chain_max') || 10,
          current_hpm: this.hpmHistory.length > 0 ? (this.hpmHistory.reduce((a, b) => a + b, 0) / this.hpmHistory.length) * 6 : 0,
          lastUpdatedAt: this.lastUpdatedAt,
-         do_server_time_ms: Date.now()
+         do_server_time_ms: Date.now(),
+         master_switch: await this.state.storage.get('master_switch') || 'OFF'
        }), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -259,7 +260,8 @@ export class ChainMonitor implements DurableObject {
       ...data,
       factionId: this.factionId,
       lastUpdatedAt: this.lastUpdatedAt,
-      microLogs: this.microLogs
+      microLogs: this.microLogs,
+      master_switch: await this.state.storage.get('master_switch') || 'OFF'
     };
   }
 
@@ -507,7 +509,8 @@ export class ChainMonitor implements DurableObject {
         recentHPM,
         trend: recentHPM > currentHPM ? 'UP' : (recentHPM < currentHPM ? 'DOWN' : 'STABLE'),
         eta: currentHPM > 0 ? Math.max(0, (await this.state.storage.get<number>('chain_max') || 10) - this.lastChainCurrent) / currentHPM : -1,
-        aggregate
+        aggregate,
+        master_switch: await this.state.storage.get('master_switch') || 'OFF'
       });
 
     } catch (err: any) {

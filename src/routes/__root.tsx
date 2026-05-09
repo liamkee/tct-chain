@@ -29,8 +29,6 @@ export const Route = createRootRoute({
         </div>
 
         <div className="flex items-center gap-4">
-          <StatusIndicator />
-          <div className="h-8 w-px bg-white/10 mx-2" />
           <AuthHeaderActions />
         </div>
       </header>
@@ -84,9 +82,6 @@ function AuthHeaderActions() {
       >
         Disconnect
       </button>
-      <div className="w-8 h-8 rounded-full bg-linear-to-br from-indigo-500 to-indigo-700 border border-white/10 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-         <span className="text-xs text-white font-bold">{user?.username?.[0] || user?.torn_id?.[0] || '?'}</span>
-      </div>
     </div>
   )
 }

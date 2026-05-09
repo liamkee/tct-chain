@@ -5,40 +5,58 @@ export const MemberGrid: React.FC = () => {
   const members = useDashboardStore((state) => state.members);
   const globalSelectedMembers = useDashboardStore((state) => state.globalSelectedMembers);
   const filters = useDashboardStore((state) => state.filters);
+  const viewMode = useDashboardStore((state) => state.viewMode);
 
   const processedMembers = Object.values(members)
     .filter(m => {
+      // If Power First is on, only show members who have submitted an API key (have live data)
+      if (filters.sortByPower && (!m.last_action || m.energy === undefined)) return false;
+      
       if (filters.hideOffline && m.last_action?.status !== 'Online') return false;
       if (filters.hideHospital && m.status?.state === 'Hospital') return false;
       return true;
     })
     .sort((a, b) => {
-    if (filters.sortByPower) {
-      // 1. 状态优先级：Online (0) > Idle (1) > Offline (2)
-      const getStatusWeight = (m: any) => {
-        const s = m.last_action?.status;
-        if (s === 'Online') return 0;
-        if (s === 'Idle') return 1;
-        return 2;
-      };
-
-      const statusDiff = getStatusWeight(a) - getStatusWeight(b);
-      if (statusDiff !== 0) return statusDiff;
-
-      // 2. 如果状态相同，看最后活跃秒数 (小的在前)
-      const secA = a.last_action?.seconds ?? 999999;
-      const secB = b.last_action?.seconds ?? 999999;
-      if (secA !== secB) return secA - secB;
-
-      // 3. 如果还是相同，能量高的在前
-      return (b.energy || 0) - (a.energy || 0);
-    }
-      
-      // 默认排序：在线状态优先
+      if (filters.sortByPower) {
+        // Purely descend by energy/power
+        const energyDiff = (b.energy || 0) - (a.energy || 0);
+        if (energyDiff !== 0) return energyDiff;
+        
+        // Tie-breaker: Online status
+        const getStatusWeight = (m: any) => {
+          const s = m.last_action?.status;
+          if (s === 'Online') return 0;
+          if (s === 'Idle') return 1;
+          return 2;
+        };
+        return getStatusWeight(a) - getStatusWeight(b);
+      }
       if (a.last_action?.status === 'Online' && b.last_action?.status !== 'Online') return -1;
       if (a.last_action?.status !== 'Online' && b.last_action?.status === 'Online') return 1;
       return 0;
     });
+
+  if (viewMode === 'list') {
+    return (
+      <div className="flex flex-col gap-1 p-2 md:p-4">
+        {/* Table Header */}
+        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5">
+          <div className="col-span-3">Personnel</div>
+          <div className="col-span-2">Life Status</div>
+          <div className="col-span-2">Activity</div>
+          <div className="col-span-3">Energy</div>
+          <div className="col-span-2 text-right">Cooldowns</div>
+        </div>
+        {processedMembers.map((member) => (
+          <MemberRow 
+            key={member.id} 
+            member={member} 
+            isSelected={globalSelectedMembers.includes(member.id)}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4 p-2 md:p-4">
@@ -128,6 +146,79 @@ const MemberCard: React.FC<{ member: any, isSelected: boolean }> = ({ member, is
         <span className={`text-[10px] font-black ${member.refill_used ? 'text-rose-400' : 'text-emerald-400'}`}>
           {member.refill_used ? 'USED' : 'READY'}
         </span>
+      </div>
+    </div>
+  );
+};
+
+const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isSelected }) => {
+  const statusColor = member.status?.state === 'Okay' ? 'text-emerald-400' : 
+                     member.status?.state === 'Hospital' ? 'text-rose-400' : 'text-amber-400';
+  
+  const onlineColor = member.last_action?.status === 'Online' ? 'text-green-400' : 
+                     member.last_action?.status === 'Idle' ? 'text-amber-400' : 'text-zinc-500';
+
+  return (
+    <div className={`grid grid-cols-12 gap-4 items-center px-4 py-2 rounded-lg border border-white/5 bg-zinc-900/30 hover:bg-zinc-800/50 transition-all ${isSelected ? 'ring-1 ring-indigo-500 bg-indigo-500/5' : ''}`}>
+      {/* Personnel */}
+      <div className="col-span-3 flex items-center gap-3">
+        <span className="font-bold text-zinc-100 truncate text-sm">{member.name}</span>
+        <span className="text-[10px] text-zinc-600 font-mono">#{member.id}</span>
+      </div>
+
+      {/* Life Status */}
+      <div className="col-span-2 flex items-center gap-2">
+        <div className={`h-1.5 w-1.5 rounded-full ${member.status?.state === 'Okay' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+        <span className={`text-xs font-bold ${statusColor}`}>{member.status?.state}</span>
+      </div>
+
+      {/* Activity */}
+      <div className="col-span-2">
+        <span className={`text-[10px] font-black uppercase tracking-wider ${onlineColor}`}>{member.last_action?.status}</span>
+        {member.last_action?.status !== 'Online' && (
+          <span className="text-zinc-600 text-[9px] ml-2 font-mono">
+            {member.last_action?.seconds && member.last_action.seconds > 3600 
+              ? `${Math.floor(member.last_action.seconds / 3600)}h` 
+              : `${Math.floor((member.last_action?.seconds || 0) / 60)}m`}
+          </span>
+        )}
+      </div>
+
+      {/* Energy */}
+      <div className="col-span-3 flex items-center gap-3">
+        <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-linear-to-r from-indigo-500 to-cyan-400 transition-all duration-1000"
+            style={{ width: `${((member.energy || 0) / (member.energy_max || 100)) * 100}%` }}
+          />
+        </div>
+        <span className="text-[10px] font-mono text-zinc-400 min-w-[45px] text-right">
+          {member.energy || 0}/{member.energy_max || 100}
+        </span>
+      </div>
+
+      {/* Cooldowns */}
+      <div className="col-span-2 flex justify-end gap-2">
+        {(member.cooldowns?.drug || 0) > 0 && (
+          <div className="w-6 h-6 rounded bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-[8px] font-bold text-orange-400" title="Drug CD">
+            D
+          </div>
+        )}
+        {(member.cooldowns?.medical || 0) > 0 && (
+          <div className="w-6 h-6 rounded bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-[8px] font-bold text-rose-400" title="Med CD">
+            M
+          </div>
+        )}
+        {(member.cooldowns?.booster || 0) > 0 && (
+          <div className="w-6 h-6 rounded bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-[8px] font-bold text-indigo-400" title="Boost CD">
+            B
+          </div>
+        )}
+        {member.refill_used && (
+          <div className="w-6 h-6 rounded bg-zinc-800 border border-white/5 flex items-center justify-center text-[8px] font-bold text-zinc-600" title="Refill Used">
+            R
+          </div>
+        )}
       </div>
     </div>
   );
