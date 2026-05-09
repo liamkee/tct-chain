@@ -1,6 +1,8 @@
 import { createRootRoute, Outlet, Link } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { StatusIndicator } from '../components/StatusIndicator'
+import { Toaster } from 'react-hot-toast'
+import { useAuthStore } from '../hooks/useAuthStore'
 
 export const Route = createRootRoute({
   component: () => (
@@ -29,9 +31,7 @@ export const Route = createRootRoute({
         <div className="flex items-center gap-4">
           <StatusIndicator />
           <div className="h-8 w-px bg-white/10 mx-2" />
-          <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center cursor-pointer hover:bg-zinc-700 transition-colors">
-             <span className="text-xs text-zinc-400">J</span>
-          </div>
+          <AuthHeaderActions />
         </div>
       </header>
 
@@ -48,9 +48,48 @@ export const Route = createRootRoute({
       </footer>
 
       <TanStackRouterDevtools />
+      <Toaster 
+        position="bottom-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#18181b',
+            color: '#fff',
+            border: '1px border rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            fontSize: '14px',
+          },
+        }}
+      />
     </div>
   ),
 })
+
+function AuthHeaderActions() {
+  const { isAuthenticated, user, logout } = useAuthStore()
+
+  if (!isAuthenticated || user?.role === 'unverified') {
+    return (
+      <div className="w-8 h-8 rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center grayscale opacity-30">
+        <span className="text-[10px] text-zinc-500 font-bold">OFF</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      <button 
+        onClick={logout}
+        className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-rose-500 transition-colors"
+      >
+        Disconnect
+      </button>
+      <div className="w-8 h-8 rounded-full bg-linear-to-br from-indigo-500 to-indigo-700 border border-white/10 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+         <span className="text-xs text-white font-bold">{user?.username?.[0] || user?.torn_id?.[0] || '?'}</span>
+      </div>
+    </div>
+  )
+}
 
 function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
   return (

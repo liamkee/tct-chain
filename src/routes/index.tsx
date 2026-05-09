@@ -2,14 +2,39 @@ import { useEffect, useState, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useTctSocket } from '../hooks/useTctSocket'
 import { useDashboardStore } from '../hooks/useDashboardStore'
+import { useAuthStore } from '../hooks/useAuthStore'
 import { MemberGrid } from '../components/MemberGrid'
 import { DashboardControls } from '../components/DashboardControls'
+import { LoginView } from '../components/LoginView'
 
 export const Route = createFileRoute('/')({
   component: Index,
 })
 
 function Index() {
+  const { isAuthenticated, user, isInitialized, checkAuth } = useAuthStore()
+  
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  // If not authenticated or unverified, show LoginView
+  if (!isAuthenticated || user?.role === 'unverified') {
+    return <LoginView />
+  }
+
+  return <DashboardContent />
+}
+
+function DashboardContent() {
   // 启动 WebSocket 引擎
   useTctSocket();
   
@@ -40,7 +65,7 @@ function Index() {
   const formatTimeout = (s: number) => {
     const mins = Math.floor(s / 60);
     const secs = Math.floor(s % 60);
-    const ms = Math.floor((s % 1) * 100); // 增加毫秒显示增强紧迫感
+    const ms = Math.floor((s % 1) * 100); 
     return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
   };
 
@@ -53,7 +78,7 @@ function Index() {
   };
 
   const isCritical = localTimeout > 0 && localTimeout < 60;
-  const isBroken = localTimeout <= 0 && chain.current > 0; // 这里的逻辑可以根据实际情况微调
+  const isBroken = localTimeout <= 0 && chain.current > 0; 
   const progress = Math.min(100, (chain.current / (chain.target || 1)) * 100);
 
   return (
@@ -141,7 +166,6 @@ function Index() {
       <DashboardControls />
 
       <main className="max-w-[1600px] mx-auto pt-4 px-2 md:px-0">
-        {/* 聚合战力推演概览 (Phase 3 Deployment) */}
         <div className="px-4 md:px-6 mb-6">
            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-wrap gap-8 items-center justify-between">
               <div className="flex gap-6 items-center">
@@ -182,11 +206,9 @@ function Index() {
            </div>
         </div>
 
-        {/* 成员矩阵 */}
         <MemberGrid />
       </main>
 
-      {/* 全局动效背景 */}
       <div className="fixed inset-0 pointer-events-none z-[-1] opacity-50">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-500/10 blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-cyan-500/5 blur-[120px]" />

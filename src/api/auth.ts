@@ -4,22 +4,19 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { sign, verify } from 'hono/jwt'
 import { drizzle } from 'drizzle-orm/d1'
 import { eq } from 'drizzle-orm'
-import { members } from '../db/schema'
+import { members, factions } from '../db/schema'
 import type { Env } from './index'
 import { SecurityService } from '../services/security'
 
 const auth = new Hono<Env>()
 
-// Helper: Verify Torn API Key & Faction
-async function verifyTornKey(apiKey: string, factionId: string) {
+// Helper: Verify Torn API Key
+async function verifyTornKey(apiKey: string) {
   const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`)
   if (!res.ok) return { error: 'Torn API temporarily unavailable', status: 502 }
   
   const data = await res.json() as any
   if (data.error || !data.player_id) return { error: 'Invalid API Key', status: 400 }
-  
-  const userFactionId = data.faction?.faction_id?.toString()
-  if (userFactionId !== factionId) return { error: 'You are not a member of the authorized faction', status: 403 }
   
   return { success: true, data }
 }
@@ -32,7 +29,8 @@ async function setSessionCookie(c: Context, payload: any, secret: string) {
     httpOnly: true,
     secure: isSecure,
     sameSite: 'Lax',
-    path: '/'
+    path: '/',
+    maxAge: 60 * 60 * 24 * 30 // 30 days
   })
 }
 
@@ -119,57 +117,61 @@ auth.get('/callback', async (c) => {
     return c.redirect('/bind')
   }
 
-  // Verify existing API key
-  const security = new SecurityService(c.env.ENCRYPTION_SECRET)
-  const rawApiKey = await security.decrypt(member[0].api_key)
-  if (!rawApiKey) {
-    deleteCookie(c, 'tct_session', { path: '/' })
-    return c.redirect('/bind?error=decryption_failed')
-  }
-  
-  const tornValidation = await verifyTornKey(rawApiKey, c.env.FACTION_ID)
-  if (!tornValidation.success) {
-    deleteCookie(c, 'tct_session', { path: '/' })
-    return c.redirect(`/unauthorized?reason=${encodeURIComponent(tornValidation.error || 'invalid')}`)
-  }
-
   // Full Authenticated Session
   await setSessionCookie(c, {
     torn_id: member[0].torn_id,
     discord_id: discordId,
+    faction_id: member[0].faction_id,
     role: member[0].role,
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, // 24h
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30, // 30 days
   }, c.env.JWT_SECRET)
 
   return c.redirect('/dashboard')
 })
 
-// Step 3: API Key Binding
-auth.post('/bind', async (c) => {
-  const body = await c.req.parseBody()
-  const apiKey = body.apiKey as string
+// Step 3: API Key Verification (Preview)
+auth.post('/verify', async (c) => {
+  const { apiKey } = await c.req.json() as { apiKey: string }
   if (!apiKey || apiKey.length !== 16) {
     return c.json({ error: 'Invalid API Key format' }, 400)
   }
 
+  const tornValidation = await verifyTornKey(apiKey)
+  if (!tornValidation.success) {
+    return c.json({ error: tornValidation.error }, tornValidation.status as any)
+  }
+
+  const data = tornValidation.data
+  return c.json({
+    success: true,
+    profile: {
+      name: data.name,
+      player_id: data.player_id,
+      faction_name: data.faction?.faction_name,
+      faction_id: data.faction?.faction_id
+    }
+  })
+})
+
+auth.post('/bind', async (c) => {
+  const body = await c.req.json() as { apiKey: string }
+  const apiKey = body.apiKey
+  if (!apiKey || apiKey.length !== 16) {
+    return c.json({ error: 'Invalid API Key format' }, 400)
+  }
+
+  // We check for an existing session but don't strictly require it
   const token = getCookie(c, 'tct_session')
-  if (!token) return c.json({ error: 'No active session' }, 401)
-
-  let payload;
-  try {
-    payload = await verify(token, c.env.JWT_SECRET, 'HS256')
-  } catch (e) {
-    return c.json({ error: 'Invalid or expired session' }, 401)
+  let discordId = null
+  if (token) {
+    try {
+      const payload = await verify(token, c.env.JWT_SECRET, 'HS256') as any
+      discordId = payload.discord_id
+    } catch (e) {}
   }
-
-  if (payload.role !== 'unverified') {
-    return c.json({ error: 'Already verified' }, 400)
-  }
-
-  const discordId = payload.discord_id as string
 
   // Validate Torn Key
-  const tornValidation = await verifyTornKey(apiKey, c.env.FACTION_ID)
+  const tornValidation = await verifyTornKey(apiKey)
   if (!tornValidation.success) {
     return c.json({ error: tornValidation.error }, tornValidation.status as any)
   }
@@ -181,14 +183,30 @@ auth.post('/bind', async (c) => {
   const db = drizzle(c.env.DB)
   const tornId = tornData.player_id
   const name = tornData.name
+  const factionId = tornData.faction?.faction_id
+  const factionName = tornData.faction?.faction_name
 
-  const existing = await db.select().from(members).where(eq(members.discord_id, discordId)).limit(1)
+  if (!factionId) {
+    return c.json({ error: 'You must be in a faction to use this tool' }, 400)
+  }
+
+  // Upsert Faction
+  await db.insert(factions).values({
+    id: factionId,
+    name: factionName,
+  }).onConflictDoUpdate({
+    target: factions.id,
+    set: { name: factionName }
+  })
+
+  const existing = await db.select().from(members).where(eq(members.torn_id, tornId)).limit(1)
   if (existing.length > 0) {
     await db.update(members).set({
-      torn_id: tornId,
       name,
       api_key: encryptedKey,
-    }).where(eq(members.discord_id, discordId))
+      faction_id: factionId,
+      discord_id: discordId || existing[0].discord_id // Keep existing discord_id if we don't have a new one
+    }).where(eq(members.torn_id, tornId))
   } else {
     await db.insert(members).values({
       torn_id: tornId,
@@ -196,7 +214,8 @@ auth.post('/bind', async (c) => {
       name,
       api_key: encryptedKey,
       role: 'member',
-      is_donator: tornData.donator ? 1 : 0
+      is_donator: tornData.donator ? 1 : 0,
+      faction_id: factionId
     })
   }
 
@@ -204,20 +223,58 @@ auth.post('/bind', async (c) => {
   await setSessionCookie(c, {
     torn_id: tornId,
     discord_id: discordId,
+    faction_id: factionId,
     role: existing.length > 0 ? existing[0].role : 'member',
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, // 24h
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30, // 30 days
   }, c.env.JWT_SECRET)
 
-  return c.json({ success: true, message: 'Bind successful' })
+  // 🚀 Proactive DO Ping: Ensure new member is picked up immediately
+  try {
+    const id = c.env.CHAIN_MONITOR.idFromName(factionId.toString())
+    const monitor = c.env.CHAIN_MONITOR.get(id)
+    await monitor.fetch('http://do/internal/init', {
+      method: 'POST',
+      body: JSON.stringify({ factionId: factionId.toString() })
+    })
+    await monitor.fetch('http://do/internal/start')
+  } catch (e) {
+    console.error(`[Auth] Failed to proactively ping DO for faction ${factionId}:`, e)
+  }
+
+  return c.json({ success: true, message: 'Bind successful', faction_id: factionId })
 })
 
-// Step 4: Current User Info
+// Step 5: Current User Info
 auth.get('/me', async (c) => {
   const token = getCookie(c, 'tct_session')
   if (!token) return c.json({ authenticated: false }, 401)
 
   try {
-    const payload = await verify(token, c.env.JWT_SECRET, 'HS256')
+    const payload = await verify(token, c.env.JWT_SECRET, 'HS256') as any
+    
+    // 🚀 Session Persistence Logic: Validate Torn API Key
+    if (payload.torn_id && payload.role !== 'unverified') {
+      const db = drizzle(c.env.DB)
+      const member = await db.select().from(members).where(eq(members.torn_id, payload.torn_id)).limit(1)
+      
+      if (member.length > 0 && member[0].api_key) {
+        const security = new SecurityService(c.env.ENCRYPTION_SECRET)
+        const rawKey = await security.decrypt(member[0].api_key)
+        
+        if (rawKey) {
+          // Quick ping to Torn to ensure key is still valid
+          const res = await fetch(`https://api.torn.com/user/?selections=basic&key=${rawKey}`)
+          const data = await res.json() as any
+          
+          if (data.error) {
+            console.log(`[Auth] Invaliding session for ${payload.torn_id} due to API error: ${data.error.error}`)
+            deleteCookie(c, 'tct_session', { path: '/' })
+            return c.json({ authenticated: false, error: 'Session expired due to invalid API key' }, 401)
+          }
+        }
+      }
+    }
+
     return c.json({
       authenticated: true,
       user: payload

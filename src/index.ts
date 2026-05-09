@@ -37,11 +37,21 @@ app.route('/api', api);
 
 // 🚀 WebSocket 网关
 app.all('/ws', async (c) => {
-  console.log('[WS] Incoming connection attempt...');
-  const id = c.env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR');
-  const stub = c.env.CHAIN_MONITOR.get(id);
-  return stub.fetch(c.req.raw);
-});
+  const token = getCookie(c, 'tct_session')
+  if (!token) return new Response('Unauthorized', { status: 401 })
+
+  try {
+    const payload = await verify(token, c.env.JWT_SECRET, 'HS256') as any
+    const factionId = payload.faction_id
+    if (!factionId) return new Response('No faction associated with session', { status: 400 })
+
+    const id = c.env.CHAIN_MONITOR.idFromName(factionId.toString())
+    const stub = c.env.CHAIN_MONITOR.get(id)
+    return stub.fetch(c.req.raw)
+  } catch (e) {
+    return new Response('Invalid Session', { status: 401 })
+  }
+})
 
 // SPA fallback in production
 app.get('*', async (c, next) => {

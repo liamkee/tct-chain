@@ -25,6 +25,7 @@
     "hono": "^4.12.16",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-hot-toast": "^2.6.0",
     "tailwindcss": "^4.2.4",
     "zustand": "^5.0.12"
   },
