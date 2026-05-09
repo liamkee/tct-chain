@@ -40,11 +40,21 @@ function DashboardLayout() {
 
   const [timer, setTimer] = useState('5:00');
   const [now, setNow] = useState(Date.now());
+  const [resetTimer, setResetTimer] = useState('00:00:00');
 
   useEffect(() => {
     const interval = setInterval(() => {
       const currentNow = Date.now();
       setNow(currentNow);
+
+      // Torn Reset Countdown (UTC 00:00)
+      const nowUtc = new Date(currentNow);
+      const nextReset = new Date(Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), nowUtc.getUTCDate() + 1));
+      const diff = nextReset.getTime() - nowUtc.getTime();
+      const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
+      const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+      const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+      setResetTimer(`${h}:${m}:${s}`);
 
       if (chain.current === 0) {
         setTimer('5:00');
@@ -143,7 +153,11 @@ function DashboardLayout() {
               />
               <StatCard 
                 label="Strategic Reserves" 
-                value={tacticalAggregate ? `+${tacticalAggregate.totalMaxPotentialHits - tacticalAggregate.totalAvailableHits}` : 'NO DATA'} 
+                value={
+                  <div className="flex items-center gap-2">
+                    <span>{tacticalAggregate ? `+${tacticalAggregate.totalMaxPotentialHits - tacticalAggregate.totalAvailableHits}` : 'NO DATA'}</span>
+                  </div>
+                } 
                 sub="Est. Xanax, FHC & Refills" 
                 color="text-cyan-400" 
               />
@@ -152,7 +166,7 @@ function DashboardLayout() {
 
           {/* Member List */}
           <main className="flex-1 p-6">
-            <MemberGrid />
+            <MemberGrid resetTimer={resetTimer} />
           </main>
 
           <footer className="px-6 py-4 text-center border-t border-white/5 bg-zinc-900/60 mt-auto">
@@ -208,7 +222,7 @@ function MasterSwitchControl({ masterSwitch }: { masterSwitch: string }) {
   );
 }
 
-function StatCard({ label, value, sub, color }: { label: string, value: string, sub: string, color: string }) {
+function StatCard({ label, value, sub, color }: { label: string, value: React.ReactNode, sub: string, color: string }) {
   return (
     <div className="bg-zinc-900/30 border border-white/5 rounded-2xl p-4 flex flex-col gap-0.5 text-left">
       <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest leading-none mb-1">{label}</span>

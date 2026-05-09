@@ -1,7 +1,7 @@
 import React from 'react'
 import { useDashboardStore } from '../hooks/useDashboardStore'
 
-export const MemberGrid: React.FC = () => {
+export const MemberGrid: React.FC<{ resetTimer: string }> = ({ resetTimer }) => {
   const masterSwitch = useDashboardStore((state) => state.masterSwitch);
   const members = useDashboardStore((state) => state.members);
   const globalSelectedMembers = useDashboardStore((state) => state.globalSelectedMembers);
@@ -148,6 +148,7 @@ export const MemberGrid: React.FC = () => {
             key={member.id}
             member={member}
             isSelected={globalSelectedMembers.includes(member.id)}
+            resetTimer={resetTimer}
           />
         ))}
       </div>
@@ -169,7 +170,7 @@ const FilterButton: React.FC<{ active: boolean, onClick: () => void, label: stri
   );
 };
 
-const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isSelected }) => {
+const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string }> = ({ member, isSelected, resetTimer }) => {
   const statusColor = member.status?.state === 'Okay' ? 'text-emerald-400' :
     member.status?.state === 'Hospital' ? 'text-rose-400' : 
     member.status?.state === 'Traveling' ? 'text-blue-400' : 'text-amber-400';
@@ -249,13 +250,24 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isS
       </div>
 
       {/* Refill Column */}
-      <div className="col-span-1 flex justify-end">
-        <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[8px] font-bold border transition-all ${member.refill_used
-          ? 'bg-zinc-800 border-white/5 text-zinc-600'
-          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.1)]'
-          }`} title={member.refill_used ? 'Refill Used' : 'Refill Ready'}>
-          R
-        </div>
+      <div className="col-span-1 flex justify-end items-center">
+        {!member.last_updated ? (
+          <span className="text-[9px] text-zinc-600 tracking-tighter uppercase font-black whitespace-nowrap">No Data</span>
+        ) : !member.refill_used ? (
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.05)]" title="Refill Ready">
+            <span className="text-[8px] font-black text-emerald-400">R</span>
+            <span className="text-[9px] font-mono font-bold text-emerald-300">
+              {(() => {
+                const [h, m] = resetTimer.split(':').map(Number);
+                return h > 0 ? `${h}h ${m}m` : `${m}m`;
+              })()}
+            </span>
+          </div>
+        ) : (
+          <div className="w-5 h-5 rounded-md flex items-center justify-center text-[8px] font-bold border border-white/5 bg-zinc-800 text-zinc-600 transition-all" title="Refill Used">
+            R
+          </div>
+        )}
       </div>
     </div>
   );
