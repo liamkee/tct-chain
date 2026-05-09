@@ -1,5 +1,31 @@
 import { TORN_ITEMS, TORN_RULES, getItemEnergy } from '../constants/items';
 
+// ============================================================
+// Offline Prediction Types
+// ============================================================
+export interface OfflineEnergyPrediction {
+  energy: number;
+  ticksElapsed: number;
+  isPredicted: boolean;
+}
+
+export interface PredictedCooldowns {
+  drug: number;
+  booster: number;
+  medical: number;
+}
+
+/**
+ * Per-cooldown-type refresh metadata.
+ * Tells the system whether the predicted CD value might be inaccurate
+ * and needs fresh API data (only relevant for ONLINE members).
+ */
+export interface CooldownRefreshFlags {
+  drug: boolean;      // true when predicted CD reaches 0 (could take another)
+  booster: boolean;   // true when predicted CD < 24h threshold
+  medical: boolean;   // true when predicted CD < 6h threshold
+}
+
 export interface MemberStatus {
   state: string;
   status: string;
@@ -25,6 +51,90 @@ export interface MemberTacticalData {
 }
 
 export class TacticalCalculator {
+  // ============================================================
+  // Offline Prediction Engine
+  // ============================================================
+
+  /**
+   * Predict current energy for an offline member based on clock-aligned ticks.
+   *
+   * Torn's energy regen is NOT "every N minutes from last update" — it fires
+   * at fixed server clock boundaries:
+   *   Normal:  :00, :15, :30, :45  (every 15 min)
+   *   Donator: :00, :10, :20, :30, :40, :50  (every 10 min)
+   *
+   * We count how many of these boundaries have been crossed since the last
+   * known data point. Since 900s and 600s divide evenly into 3600s (1 hour),
+   * and hours divide evenly into the Unix epoch, floor(ts / interval) gives
+   * us the correct tick index.
+   */
+  static predictCurrentEnergy(
+    lastEnergy: number,
+    energyMax: number,
+    lastUpdatedTs: number, // unix seconds
+    isDonator: boolean
+  ): OfflineEnergyPrediction {
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    // Interval in seconds (15min = 900s, 10min = 600s)
+    const intervalSec = isDonator
+      ? TORN_RULES.REGEN_INTERVAL_DONATOR * 60
+      : TORN_RULES.REGEN_INTERVAL_NORMAL * 60;
+
+    // Clock-aligned tick index: floor division against epoch
+    const lastTickIndex = Math.floor(lastUpdatedTs / intervalSec);
+    const nowTickIndex = Math.floor(nowSec / intervalSec);
+    const ticksElapsed = Math.max(0, nowTickIndex - lastTickIndex);
+
+    const regenEnergy = ticksElapsed * TORN_RULES.REGEN_AMOUNT;
+
+    return {
+      energy: Math.min(lastEnergy + regenEnergy, energyMax),
+      ticksElapsed,
+      isPredicted: ticksElapsed > 0,
+    };
+  }
+
+  /**
+   * Predict current cooldowns for ANY member (online or offline).
+   * Cooldowns are countdown timers in seconds — subtract elapsed time.
+   *
+   * Per-type stacking rules:
+   *   Drug:    Cannot stack. Once detected, countdown is 100% predictable.
+   *   Medical: 6h limit. Predictable while > 6h. Below 6h, member could
+   *            use another medical item (if online), invalidating prediction.
+   *   Booster: 24h limit. Predictable while > 24h. Below 24h, member could
+   *            use another booster (if online), invalidating prediction.
+   *
+   * For OFFLINE members, all CDs are always predictable (can't use items).
+   */
+  static predictCurrentCooldowns(
+    cooldowns: { drug: number; booster: number; medical: number },
+    lastUpdatedTs: number // unix seconds
+  ): { predicted: PredictedCooldowns; needsRefresh: CooldownRefreshFlags } {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const elapsedSeconds = Math.max(0, nowSec - lastUpdatedTs);
+
+    const predicted: PredictedCooldowns = {
+      drug: Math.max(0, (cooldowns.drug || 0) - elapsedSeconds),
+      booster: Math.max(0, (cooldowns.booster || 0) - elapsedSeconds),
+      medical: Math.max(0, (cooldowns.medical || 0) - elapsedSeconds),
+    };
+
+    // Refresh flags: does this CD type need fresh API data?
+    // Only meaningful for ONLINE members (offline always use prediction).
+    const needsRefresh: CooldownRefreshFlags = {
+      // Drug: no CD = member can take drug at any time (if online)
+      drug: predicted.drug === 0,
+      // Booster: needs refresh when predicted drops below 24h threshold
+      booster: predicted.booster < TORN_RULES.BOOSTER_CD_THRESHOLD && (cooldowns.booster || 0) > 0,
+      // Medical: needs refresh when predicted drops below 6h threshold
+      medical: predicted.medical < TORN_RULES.MEDICAL_CD_THRESHOLD && (cooldowns.medical || 0) > 0,
+    };
+
+    return { predicted, needsRefresh };
+  }
+
   /**
    * 基础能量计算 (Internal helper for deduplication)
    */

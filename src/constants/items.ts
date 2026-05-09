@@ -13,6 +13,12 @@ export const TORN_RULES = {
   REGEN_INTERVAL_DONATOR: 10, // 10 mins for 5e
   REGEN_INTERVAL_NORMAL: 15,  // 15 mins for 5e
   REGEN_AMOUNT: 5,
+
+  // Cooldown prediction thresholds (seconds)
+  // When CD is ABOVE these values, prediction is reliable.
+  // When CD drops BELOW, online members need re-polling.
+  MEDICAL_CD_THRESHOLD: 21600,  // 6 hours
+  BOOSTER_CD_THRESHOLD: 86400,  // 24 hours
 };
 
 export type CooldownType = 'drug' | 'booster' | 'medical';

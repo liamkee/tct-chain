@@ -21,7 +21,10 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
 
   const keyTokens: Record<string, boolean> = {};
   for (const [key, count] of Object.entries(keysCount)) {
-     const tokenRes = await monitor.fetch(`http://do/internal/token-bucket?key=${key}&count=${count}`);
+     const tokenRes = await monitor.fetch(`http://do/internal/token`, {
+        method: 'POST',
+        body: JSON.stringify({ apiKey: key, count })
+     });
      if (tokenRes.ok) {
         const { allowed } = await tokenRes.json() as any;
         keyTokens[key] = allowed;
@@ -78,7 +81,10 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
        if (decrypted) rawApiKey = decrypted;
     }
 
-    let selections = 'bars,cooldowns,icons,basic,refills';
+    // Only request what we CAN'T get from faction API.
+    // status & last_action already come from faction basic API (free).
+    // icons removed — refill detection uses refills data directly.
+    let selections = 'bars,cooldowns,refills';
 
     try {
       const res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${rawApiKey}`);
@@ -97,15 +103,19 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
          throw new Error(`Torn Error: ${data.error.error}`);
       }
 
+      // Derive energy_max from donator status (100 normal, 150 donator)
+      const energyMax = data.energy?.maximum || 100;
+      const isDonator = energyMax > 100;
+
       updatesBatch.push({
          id: tornId.toString(),
          updates: {
             energy: data.energy?.current,
-            energy_max: data.energy?.maximum,
+            energy_max: isDonator ? 150 : 100,
+            is_donator: isDonator,
             cooldowns: data.cooldowns,
-            status: data.status,
-            last_action: data.last_action,
-            refill_used: data.refills ? data.refills.energy === false : !data.icons?.icon70,
+            // status & last_action: NOT stored here — comes from faction API
+            refill_used: data.refills ? data.refills.energy === false : false,
             last_updated: Math.floor(Date.now() / 1000)
          }
       });

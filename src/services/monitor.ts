@@ -1,5 +1,6 @@
 import type { Env } from '../index'
 import { DiscordWebhookService } from './discord_webhook'
+import { TacticalCalculator } from './calculator'
 
 export class ChainMonitor implements DurableObject {
   private state: DurableObjectState;
@@ -11,6 +12,8 @@ export class ChainMonitor implements DurableObject {
   private commanderKeyCache: string | null = null;
   private lastChainCurrent: number = -1;
   private lastChainTimeout: number = -1;
+  private lastChainMax: number = 10;
+  private lastChainDeadlineMs: number = 0;
   private memberStatusCache: Map<string, string> = new Map(); // id -> stringified status
   private memberMinutesCache: Map<string, number> = new Map(); // id -> last reported minute
   private hpmHistory: number[] = []; // 存储每 10 秒的击数增量，最大长度 30 (5分钟)
@@ -20,61 +23,52 @@ export class ChainMonitor implements DurableObject {
   private lastEmergencyAlertTs: number = 0; // Discord 防骚扰限流 (内存态)
   private memberDataCache: Map<string, any> = new Map(); // 完整的成员内存缓存 (用于对比)
   private lastPersistenceTs: number = 0; // 上次强制存盘时间
+  private dbMembersCache: any[] = []; // DB 成员列表内存快取
+  private lastDbMembersTs: number = 0; // 上次查 DB 的时间
+  private tokenBuckets: Map<string, { tokens: number, resetAt: number }> = new Map(); // 纯内存 Token bucket
+  private pendingPolls: Map<string, number> = new Map(); // Action-Driven Polling 追踪
 
   constructor(state: DurableObjectState, env: Env['Bindings']) {
     this.state = state;
     this.env = env;
 
-    // 🚀 Hibernation Recovery: 从存储恢复关键内存状态
+    // 🚀 Hibernation Recovery: restore critical state from consolidated storage keys
     this.state.blockConcurrencyWhile(async () => {
       const stored = await this.state.storage.get<any>([
         'faction_id',
-        'chain_current', 
-        'chain_timeout', 
-        'micro_logs',
-        'member_status_cache',
-        'member_minutes_cache',
-        'hpm_history',
-        'last_rtt',
+        'system_state',
+        'chain_state',
         'manual_offset',
-        'interval_counter',
-        'chain_deadline_ms'
       ]);
       
       const storedMap = stored as Map<string, any>;
       this.factionId = storedMap.get('faction_id') ?? null;
-      this.lastChainCurrent = storedMap.get('chain_current') ?? -1;
-      this.lastChainTimeout = storedMap.get('chain_timeout') ?? -1;
-      this.microLogs = storedMap.get('micro_logs') ?? [];
-      
-      const statusMap = storedMap.get('member_status_cache');
-      if (statusMap) {
-        this.memberStatusCache = new Map(Object.entries(statusMap));
-      }
-
-      const minutesMap = storedMap.get('member_minutes_cache');
-      if (minutesMap) {
-        this.memberMinutesCache = new Map(Object.entries(minutesMap));
-      }
-
-      this.hpmHistory = storedMap.get('hpm_history') ?? [];
-      this.lastRTT = storedMap.get('last_rtt') ?? 0;
       this.manualOffset = storedMap.get('manual_offset') ?? 0;
 
-      // 🚀 核心優化：啟動時將所有成員數據加載到內存緩存中
-      const allStorage = await this.state.storage.list();
+      // Restore system state (1 key instead of 8)
+      const sys = storedMap.get('system_state') ?? {};
+      this.microLogs = sys.micro_logs ?? [];
+      this.hpmHistory = sys.hpm_history ?? [];
+      this.lastRTT = sys.last_rtt ?? 0;
+      if (sys.member_status_cache) {
+        this.memberStatusCache = new Map(Object.entries(sys.member_status_cache));
+      }
+      if (sys.member_minutes_cache) {
+        this.memberMinutesCache = new Map(Object.entries(sys.member_minutes_cache));
+      }
+
+      // Restore chain state (1 key instead of 4)
+      const chain = storedMap.get('chain_state') ?? {};
+      this.lastChainCurrent = chain.current ?? -1;
+      this.lastChainTimeout = chain.timeout ?? -1;
+      this.lastChainMax = chain.max ?? 10;
+      this.lastChainDeadlineMs = chain.deadline_ms ?? 0;
+
+      // 🚀 Load all members from consolidated single-key-per-member storage
+      const allStorage = await this.state.storage.list({ prefix: 'member_' });
       for (const [key, value] of allStorage.entries()) {
-         if (key.startsWith('member_')) {
-            const parts = key.split('_');
-            const id = parts[1];
-            const field = parts.slice(2).join('_');
-            
-            if (!this.memberDataCache.has(id)) {
-               this.memberDataCache.set(id, {});
-            }
-            const memberData = this.memberDataCache.get(id);
-            memberData[field] = value;
-         }
+        const id = key.replace('member_', '');
+        this.memberDataCache.set(id, value as any);
       }
       console.log(`[DO] Startup: Loaded ${this.memberDataCache.size} members into memory cache.`);
     });
@@ -128,14 +122,14 @@ export class ChainMonitor implements DurableObject {
       this.factionId = factionId;
       await this.state.storage.put('faction_id', factionId);
       return new Response(JSON.stringify({ success: true, factionId }));
-    } else if (url.pathname === '/internal/token-bucket') {
-      const apiKey = url.searchParams.get('key') || 'UNKNOWN';
-      const count = parseInt(url.searchParams.get('count') || '1', 10);
+    } else if (url.pathname === '/internal/token') {
+      const { apiKey, count } = await request.json() as { apiKey: string, count: number };
+      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey));
+      const hashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+      const bucketKey = `token_${hashHex}`;
       
-      const bucketKey = `rate_limit_${apiKey}`;
       const now = Date.now();
-      
-      let bucket = await this.state.storage.get<{tokens: number, resetAt: number}>(bucketKey) || { tokens: 90, resetAt: now + 60000 };
+      let bucket = this.tokenBuckets.get(bucketKey) || { tokens: 90, resetAt: now + 60000 };
       
       if (now > bucket.resetAt) {
         bucket = { tokens: 90, resetAt: now + 60000 };
@@ -143,7 +137,7 @@ export class ChainMonitor implements DurableObject {
       
       if (bucket.tokens >= count) {
         bucket.tokens -= count;
-        await this.state.storage.put(bucketKey, bucket);
+        this.tokenBuckets.set(bucketKey, bucket);
         return new Response(JSON.stringify({ allowed: true, remaining: bucket.tokens }), { headers: { 'Content-Type': 'application/json' } });
       } else {
         return new Response(JSON.stringify({ allowed: false, remaining: bucket.tokens, resetIn: bucket.resetAt - now }), { status: 429, headers: { 'Content-Type': 'application/json' } });
@@ -169,11 +163,18 @@ export class ChainMonitor implements DurableObject {
           
           for (const item of items) {
              const stringId = item.id.toString();
-             const oldData = this.memberDataCache.get(stringId);
-             const newData = item.updates;
+             const oldData = this.memberDataCache.get(stringId) || {};
+             
+             const successState = `${oldData.last_action?.timestamp || 0}_${oldData.status?.state || 'Unknown'}`;
+             const newData = { 
+                 ...oldData, 
+                 ...item.updates,
+                 last_successful_state: successState
+             };
 
-             // 1. WebSocket 广播永远是实时的 (只要内存里不一样就发)
-             const hasChanged = JSON.stringify(oldData) !== JSON.stringify(newData);
+             // 只比較能量和冷卻是否實質改變 (忽略 last_updated 帶來的必然後果)
+             const hasChanged = JSON.stringify({e: oldData.energy, c: oldData.cooldowns}) !== 
+                              JSON.stringify({e: newData.energy, c: newData.cooldowns});
              
              if (hasChanged) {
                 this.broadcastToWebSockets({ 
@@ -181,23 +182,22 @@ export class ChainMonitor implements DurableObject {
                   id: stringId, 
                   data: newData 
                 });
-                
-                // 更新内存缓存
-                this.memberDataCache.set(stringId, newData);
+             }
+             
+             // 永遠更新內存快取 (包含 last_updated 和 last_successful_state)
+             this.memberDataCache.set(stringId, newData);
 
-                // 2. 只有关键变化才立即存盘，否则只更新内存
-                // 关键变化：状态改变、能量大幅波动(>20)、或者距离上次存盘超过 5 分钟
-                const isCritical = !oldData || 
-                                 oldData.status?.state !== newData.status?.state || 
-                                 Math.abs((oldData.energy || 0) - (newData.energy || 0)) > 20 ||
-                                 Date.now() - this.lastPersistenceTs > 300000;
+             // 2. 只有关键变化才立即存盘，否则只更新内存
+             // 关键变化：状态改变、能量大幅波动(>20)、或者距离上次存盘超过 5 分钟
+             const isCritical = !oldData || 
+                              oldData.status?.state !== newData.status?.state || 
+                              Math.abs((oldData.energy || 0) - (newData.energy || 0)) > 20 ||
+                              Date.now() - this.lastPersistenceTs > 300000;
 
-                if (isCritical) {
-                   for (const [field, value] of Object.entries(newData)) {
-                      storageUpdates[`member_${stringId}_${field}`] = value;
-                   }
-                   needsStoragePut = true;
-                }
+             if (isCritical) {
+                // Store entire member as 1 key (not per-field)
+                storageUpdates[`member_${stringId}`] = newData;
+                needsStoragePut = true;
              }
           }
           
@@ -223,25 +223,24 @@ export class ChainMonitor implements DurableObject {
     }
 
     if (url.pathname === '/snapshot') {
-       const logs = this.microLogs;
-       
-       // 從內存緩存中直接提取所有成員
+       const predicted = this.getMembersWithPrediction();
        const members: Record<string, any> = {};
-       for (const [id, data] of this.memberDataCache.entries()) {
+       for (const [id, data] of Object.entries(predicted.members)) {
           members[`member_${id}`] = data;
        }
 
        return new Response(JSON.stringify({
          factionId: this.factionId,
          members,
-         microLogs: logs,
+         microLogs: this.microLogs,
          chain_current: this.lastChainCurrent,
          chain_timeout: this.lastChainTimeout,
-         chain_deadline_ms: await this.state.storage.get('chain_deadline_ms') || 0,
-         chain_max: await this.state.storage.get('chain_max') || 10,
+         chain_deadline_ms: this.lastChainDeadlineMs,
+         chain_max: this.lastChainMax,
          current_hpm: this.hpmHistory.length > 0 ? (this.hpmHistory.reduce((a, b) => a + b, 0) / this.hpmHistory.length) * 2 : 0,
          lastUpdatedAt: this.lastUpdatedAt,
-         do_server_time_ms: Date.now()
+         do_server_time_ms: Date.now(),
+         predictedCount: predicted.predictedCount
        }), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -291,18 +290,27 @@ export class ChainMonitor implements DurableObject {
   }
 
   private async getFullSnapshot() {
-    const storage = await this.state.storage.list();
+    // Use memory cache — no storage.list() needed
+    const predicted = this.getMembersWithPrediction();
     const data: Record<string, any> = {};
-    for (const [key, value] of storage.entries()) {
-      if (key.startsWith('member_') || key.startsWith('chain_') || key === 'global_selected_members') {
-        data[key] = value;
-      }
+
+    for (const [id, memberData] of Object.entries(predicted.members)) {
+      data[`member_${id}`] = memberData;
     }
+
+    // Chain data from memory (no storage reads needed)
+    data['chain_current'] = this.lastChainCurrent;
+    data['chain_timeout'] = this.lastChainTimeout;
+    data['chain_deadline_ms'] = this.lastChainDeadlineMs;
+    data['chain_max'] = this.lastChainMax;
+    data['global_selected_members'] = await this.state.storage.get('global_selected_members') || [];
+
     return {
       ...data,
       factionId: this.factionId,
       lastUpdatedAt: this.lastUpdatedAt,
-      microLogs: this.microLogs
+      microLogs: this.microLogs,
+      predictedCount: predicted.predictedCount
     };
   }
 
@@ -313,8 +321,14 @@ export class ChainMonitor implements DurableObject {
         return;
       }
 
-      // Fetch DB members once to avoid scope issues and redundant calls
-      const dbMembers = await this.env.DB.prepare('SELECT torn_id, name, api_key FROM Members WHERE faction_id = ? AND api_key IS NOT NULL').bind(this.factionId).all();
+      // Fetch DB members with 24-hour cache (avoids D1 queries every 30s)
+      const nowTs = Date.now();
+      if (this.dbMembersCache.length === 0 || (nowTs - this.lastDbMembersTs > 86400000)) {
+        const dbResult = await this.env.DB.prepare('SELECT torn_id, name, api_key FROM Members WHERE faction_id = ? AND api_key IS NOT NULL').bind(this.factionId).all();
+        this.dbMembersCache = dbResult.results as any[];
+        this.lastDbMembersTs = nowTs;
+      }
+      const dbMembers = this.dbMembersCache;
 
       let switchState = await this.state.storage.get<string>('master_switch');
       if (!switchState) {
@@ -338,10 +352,12 @@ export class ChainMonitor implements DurableObject {
         if (!this.commanderKeyCache) {
           // 在多租户模式下，如果没有 Faction 表，我们可以尝试从 DB 里的成员中随便选一个有效 Key
           // 或者要求每个 Faction 必须有一个 Commander Key
-          const firstWithKey = dbMembers.results[0] as any;
-          if (firstWithKey?.api_key) {
-             const security = new (await import('../services/security')).SecurityService(this.env.ENCRYPTION_SECRET);
-             this.commanderKeyCache = await security.decrypt(firstWithKey.api_key);
+          if (dbMembers.length > 0) {
+            const firstWithKey = dbMembers.find((m: any) => m.api_key && m.api_key !== '');     
+            if (firstWithKey?.api_key) {
+               const security = new (await import('../services/security')).SecurityService(this.env.ENCRYPTION_SECRET);
+               this.commanderKeyCache = await security.decrypt(firstWithKey.api_key);
+            }
           }
         }
 
@@ -397,12 +413,17 @@ export class ChainMonitor implements DurableObject {
             if (this.hpmHistory.length > 30) this.hpmHistory.shift();
           }
 
-          storageUpdates['chain_timeout'] = adjustedTimeout;
-          storageUpdates['chain_deadline_ms'] = Math.floor(Date.now() - (this.lastRTT / 2) + (timeout * 1000) + this.manualOffset);
-          storageUpdates['chain_current'] = current;
-          storageUpdates['chain_max'] = max;
+          // Chain data consolidated into single key
+          storageUpdates['chain_state'] = {
+            timeout: adjustedTimeout,
+            deadline_ms: Math.floor(Date.now() - (this.lastRTT / 2) + (timeout * 1000) + this.manualOffset),
+            current,
+            max,
+          };
           this.lastChainCurrent = current;
           this.lastChainTimeout = timeout;
+          this.lastChainMax = max;
+          this.lastChainDeadlineMs = storageUpdates['chain_state'].deadline_ms;
           hasChanges = true;
         } else {
            this.hpmHistory.push(0);
@@ -424,9 +445,11 @@ export class ChainMonitor implements DurableObject {
           const cachedMinutes = this.memberMinutesCache.get(id);
 
           if (currentStatusStr !== cachedStatusStr || currentMinutes !== cachedMinutes) {
-            storageUpdates[`member_${id}_name`] = member.name;
-            storageUpdates[`member_${id}_status`] = member.status;
-            storageUpdates[`member_${id}_last_action`] = member.last_action;
+            // Merge faction API data into member's single-key cache
+            const existing = this.memberDataCache.get(id) || {};
+            const merged = { ...existing, name: member.name, status: member.status, last_action: member.last_action };
+            this.memberDataCache.set(id, merged);
+            storageUpdates[`member_${id}`] = merged;
             
             this.memberStatusCache.set(id, currentStatusStr);
             this.memberMinutesCache.set(id, currentMinutes);
@@ -435,36 +458,56 @@ export class ChainMonitor implements DurableObject {
         }
 
         if (hasChanges) {
-          await this.state.storage.put(storageUpdates);
-          const updatesByMember: Record<string, any> = {};
-          Object.entries(storageUpdates).forEach(([key, value]) => {
+          // DO NOT storage.put here yet, merge with the final batch
+          for (const [key, value] of Object.entries(storageUpdates)) {
             if (key.startsWith('member_')) {
-              const parts = key.split('_');
-              const id = parts[1];
-              const field = parts.slice(2).join('_');
-              if (!updatesByMember[id]) updatesByMember[id] = {};
-              updatesByMember[id][field] = value;
+              const id = key.replace('member_', '');
+              this.broadcastToWebSockets({ type: 'MEMBER_SOFT_UPDATE', id, data: value, do_server_time_ms: Date.now() });
             }
-          });
-
-          for (const [id, data] of Object.entries(updatesByMember)) {
-            this.broadcastToWebSockets({ type: 'MEMBER_SOFT_UPDATE', id, data, do_server_time_ms: Date.now() });
           }
         }
 
         // 🚀 核心调度逻辑 (仅本帮派成员)
-        const activeMemberKeys = new Map(dbMembers.results.map((m: any) => [m.torn_id.toString(), m.api_key]));
+        const activeMemberKeys = new Map(dbMembers.map((m: any) => [m.torn_id.toString(), m.api_key]));
 
+        let offlineSkipped = 0;
+        let actionSkipped = 0;
         const membersToUpdate = Object.keys(membersData).filter(id => {
           if (!activeMemberKeys.has(id)) return false;
           const member = membersData[id];
           const status = member.status;
+          const currentState = `${member.last_action?.timestamp || 0}_${status?.state || 'Unknown'}`;
+
           if (status) {
             if ((status.state === 'Hospital' || status.state === 'Jail') && (status.until || 0) > Date.now() / 1000 + 3600) return false;
             if (status.state === 'Traveling') return false;
           }
+
+          // 🚀 Action-Driven Polling
+          const cached = this.memberDataCache.get(id);
+          if (cached && cached.last_successful_state === currentState) {
+             if (member.last_action?.status === 'Offline') {
+                offlineSkipped++;
+             } else {
+                actionSkipped++;
+             }
+             return false;
+          }
+
+          // 防止短期內重複加入佇列
+          const pendingKey = `${id}_${currentState}`;
+          const lastQueuedTs = this.pendingPolls.get(pendingKey);
+          if (lastQueuedTs && Date.now() < lastQueuedTs + 120000) {
+             return false;
+          }
+
+          this.pendingPolls.set(pendingKey, Date.now());
           return true;
         });
+
+        if (offlineSkipped > 0 || actionSkipped > 0) {
+          console.log(`[DO] Action-Driven Polling: skipped ${offlineSkipped} offline, ${actionSkipped} inactive online members.`);
+        }
 
         const memberMessages = membersToUpdate.map(id => ({ body: { tornId: id, apiKey: activeMemberKeys.get(id), ts: Date.now() }}));
 
@@ -477,28 +520,16 @@ export class ChainMonitor implements DurableObject {
 
       this.lastUpdatedAt = Date.now();
       
-      const allMembersData: Record<string, any> = {};
+      const predicted = this.getMembersWithPrediction();
+      const allMembersData = predicted.members;
       const selectedIds: string[] = (await this.state.storage.get('global_selected_members')) || [];
-      
-      // 🚀 直接使用內存緩存中的數據，移除 storage.list()
-      for (const [id, data] of this.memberDataCache.entries()) {
-         if (data.energy !== undefined) {
-            allMembersData[id] = {
-               id,
-               name: data.name,
-               energy: data.energy,
-               energy_max: data.energy_max || 100,
-               cooldowns: data.cooldowns,
-               status: data.status,
-               last_action: data.last_action,
-               refill_used: data.refill_used,
-               is_donator: (data.energy_max || 100) > 100
-            };
-         }
+
+      if (predicted.predictedCount > 0) {
+         console.log(`[DO] Offline prediction applied to ${predicted.predictedCount} members.`);
       }
 
       // Fill in members who are in DB but not yet in DO storage
-      for (const member of dbMembers.results as any[]) {
+      for (const member of dbMembers) {
         const id = member.torn_id.toString();
         if (!allMembersData[id]) {
           allMembersData[id] = {
@@ -516,19 +547,20 @@ export class ChainMonitor implements DurableObject {
         }
       }
 
-      const aggregate = (await import('./calculator')).TacticalCalculator.aggregate(allMembersData, selectedIds);
-      await this.state.storage.put('tactical_aggregate', aggregate);
+      const aggregate = TacticalCalculator.aggregate(allMembersData, selectedIds);
 
+      // 🚀 Conditional persistence: only write when data actually changed.
+      // Consolidated into faction updates + 1 system key
       if (hasChanges) {
-        await this.state.storage.put('member_status_cache', Object.fromEntries(this.memberStatusCache));
-        await this.state.storage.put('member_minutes_cache', Object.fromEntries(this.memberMinutesCache));
+        storageUpdates['system_state'] = {
+          micro_logs: this.microLogs,
+          hpm_history: this.hpmHistory,
+          last_rtt: this.lastRTT,
+          member_status_cache: Object.fromEntries(this.memberStatusCache),
+          member_minutes_cache: Object.fromEntries(this.memberMinutesCache),
+        };
+        await this.state.storage.put(storageUpdates);
       }
-
-      await this.state.storage.put('micro_logs', this.microLogs);
-      await this.state.storage.put('chain_current', this.lastChainCurrent);
-      await this.state.storage.put('chain_timeout', this.lastChainTimeout);
-      await this.state.storage.put('hpm_history', this.hpmHistory);
-      await this.state.storage.put('last_rtt', this.lastRTT);
       
       this.broadcastToWebSockets({ 
         type: 'HEARTBEAT', 
@@ -538,7 +570,7 @@ export class ChainMonitor implements DurableObject {
         hpm: currentHPM,
         recentHPM,
         trend: recentHPM > currentHPM ? 'UP' : (recentHPM < currentHPM ? 'DOWN' : 'STABLE'),
-        eta: currentHPM > 0 ? Math.max(0, (await this.state.storage.get<number>('chain_max') || 10) - this.lastChainCurrent) / currentHPM : -1,
+        eta: currentHPM > 0 ? Math.max(0, this.lastChainMax - this.lastChainCurrent) / currentHPM : -1,
         aggregate
       });
 
@@ -546,6 +578,76 @@ export class ChainMonitor implements DurableObject {
       this.microLogs.push({ ts: Date.now(), msg: `alarm error: ${err.message}` });
       if (this.microLogs.length > 20) this.microLogs.shift();
     }
+  }
+
+  // ============================================================
+  // 🚀 Prediction Engine: Shared helper for all data output paths
+  // Used by /snapshot, getFullSnapshot (WS), and alarm() aggregation.
+  //
+  // Energy prediction: OFFLINE members only (can't predict active attacks)
+  // Cooldown prediction: ALL members (CD countdown is deterministic)
+  // ============================================================
+  private getMembersWithPrediction(): { members: Record<string, any>; predictedCount: number } {
+    const members: Record<string, any> = {};
+    let predictedCount = 0;
+
+    for (const [id, data] of this.memberDataCache.entries()) {
+      if (data.energy !== undefined) {
+        const isDonator = data.is_donator ?? (data.energy_max || 100) > 100;
+        const lastUpdated = data.last_updated || 0;
+
+        const isOffline = data.last_action?.status === 'Offline' ||
+                          data.status?.state === 'Traveling' ||
+                          ((data.status?.state === 'Hospital' || data.status?.state === 'Jail') &&
+                           (data.status?.until || 0) > Date.now() / 1000 + 3600);
+
+        // --- Energy prediction: OFFLINE only ---
+        let currentEnergy = data.energy;
+        let energyPredicted = false;
+
+        if (isOffline && lastUpdated > 0) {
+          const energyPred = TacticalCalculator.predictCurrentEnergy(
+            data.energy, data.energy_max || 100, lastUpdated, isDonator
+          );
+          currentEnergy = energyPred.energy;
+          energyPredicted = true;
+          predictedCount++;
+        }
+
+        // --- Cooldown prediction: ALL members ---
+        let currentCooldowns = data.cooldowns;
+        let cdNeedsRefresh = { drug: false, booster: false, medical: false };
+
+        if (lastUpdated > 0 && data.cooldowns) {
+          const cdResult = TacticalCalculator.predictCurrentCooldowns(
+            data.cooldowns, lastUpdated
+          );
+          currentCooldowns = cdResult.predicted;
+
+          // For offline members, refresh is never needed (can't use items)
+          if (!isOffline) {
+            cdNeedsRefresh = cdResult.needsRefresh;
+          }
+        }
+
+        members[id] = {
+          id,
+          name: data.name,
+          energy: currentEnergy,
+          energy_max: data.energy_max || 100,
+          cooldowns: currentCooldowns,
+          status: data.status,
+          last_action: data.last_action,
+          refill_used: data.refill_used,
+          is_donator: isDonator,
+          is_predicted: energyPredicted,
+          cd_needs_refresh: cdNeedsRefresh,
+          last_updated: lastUpdated,
+        };
+      }
+    }
+
+    return { members, predictedCount };
   }
 
   private broadcastToWebSockets(payload: any) {
