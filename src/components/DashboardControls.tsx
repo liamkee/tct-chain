@@ -45,17 +45,7 @@ export const DashboardControls: React.FC = () => {
 
       {/* 战术配置 */}
       <div className="flex items-center gap-6">
-        {/* Chain Target */}
-        <div className="flex items-center gap-3 bg-black/40 px-3 py-1.5 rounded-lg border border-white/5">
-          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Target</span>
-          <input
-            type="number"
-            value={chain.target}
-            onChange={(e) => setTarget(Math.max(0, parseInt(e.target.value) || 0))}
-            min="0"
-            className="w-16 bg-transparent text-sm font-black font-mono text-indigo-400 focus:outline-none border-b border-indigo-500/30 focus:border-indigo-500 text-center"
-          />
-        </div>
+
 
         {/* Sync Offset */}
         <div className="flex items-center gap-3 bg-black/40 px-3 py-1.5 rounded-lg border border-white/5">

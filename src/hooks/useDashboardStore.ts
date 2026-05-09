@@ -16,8 +16,7 @@ interface ChainStatus {
   current: number;
   max: number;
   timeout: number;
-  deadline: number; // 🚀 目标过期时间戳 (ms)
-  target: number; // 🚀 目标连锁
+  deadline: number;
 }
 
 interface DashboardState {
@@ -70,7 +69,7 @@ interface DashboardState {
 
 export const useDashboardStore = create<DashboardState>((set) => ({
   members: {},
-  chain: { current: 0, max: 0, timeout: 0, deadline: 0, target: 100 },
+  chain: { current: 0, max: 10, timeout: 0, deadline: 0 },
   globalSelectedMembers: [],
   microLogs: [],
   lastUpdatedAt: 0,
@@ -100,11 +99,10 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     const offset = doTime - Date.now();
 
     const chain = {
-      current: data.chain_current || 0,
-      timeout: data.chain_timeout || 0,
+      current: Math.max(0, data.chain_current || 0),
+      timeout: Math.max(0, data.chain_timeout || 0),
       deadline: data.chain_deadline_ms || (Date.now() + offset + (data.chain_timeout || 0) * 1000),
-      max: data.chain_max || 10,
-      target: data.chain_target || 100
+      max: Math.max(10, data.chain_max || 10)
     };
 
     const memberSource = data.members || {};
@@ -160,7 +158,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setSquad: (members) => set({ globalSelectedMembers: members }),
   setConnection: (status) => set({ isConnected: status }),
   setTarget: (val: number) => set((state) => ({ 
-    chain: { ...state.chain, target: val } 
+    chain: { ...state.chain, max: val } 
   })),
   setViewMode: (mode) => set({ viewMode: mode }),
   toggleFilter: (key) => set((state) => ({
@@ -199,8 +197,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       current: data.chain_current,
       timeout: data.chain_timeout || state.chain.timeout,
       deadline: data.chain_deadline_ms || state.chain.deadline,
-      max: data.chain_max || state.chain.max,
-      target: data.chain_target || state.chain.target
+      max: data.chain_max || state.chain.max
     } : state.chain;
 
     console.log(`[Store] Heartbeat: Synced ${Object.keys(data.members || {}).length} members.`);

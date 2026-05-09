@@ -90,7 +90,7 @@ function DashboardContent() {
 
   const isCritical = localTimeout > 0 && localTimeout < 60;
   const isBroken = localTimeout <= 0 && chain.current > 0;
-  const progress = Math.min(100, (chain.current / (chain.target || 1)) * 100);
+  const progress = Math.min(100, (chain.current / (chain.max || 10)) * 100);
 
   return (
     <div className={`min-h-screen bg-black text-zinc-100 selection:bg-indigo-500/30 transition-colors duration-500 ${isCritical ? 'shadow-[inset_0_0_100px_rgba(239,68,68,0.2)]' : ''} ${isBroken ? 'shadow-[inset_0_0_100px_rgba(239,68,68,0.5)]' : ''}`}>
@@ -145,7 +145,7 @@ function DashboardContent() {
                 <span className="text-3xl font-black font-mono tracking-tighter text-transparent bg-clip-text bg-linear-to-b from-white to-zinc-500">
                   {chain.current}
                 </span>
-                <span className="text-zinc-600 text-sm font-bold">/ {chain.target}</span>
+                <span className="text-zinc-600 text-sm font-bold">/ {chain.max}</span>
               </div>
               <div className="w-full h-1 bg-zinc-800 rounded-full mt-1 overflow-hidden">
                 <div
@@ -238,23 +238,23 @@ function DashboardContent() {
                 <div className="h-10 w-px bg-white/5 mx-2 hidden lg:block" />
 
                 <div className="text-center relative">
-                  <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Target Gap</span>
+                  <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Max Gap</span>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xl font-mono font-black ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-400' :
-                      (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-400' :
-                        (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-400' : 'text-rose-500'
+                    <span className={`text-xl font-mono font-black ${(chain.max - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-400' :
+                      (chain.max - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-400' :
+                        (chain.max - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-400' : 'text-rose-500'
                       }`}>
-                      {Math.max(0, chain.target - chain.current)}
+                      {Math.max(0, chain.max - chain.current)}
                     </span>
                     <div className="flex flex-col items-start leading-none">
                       <span className="text-[8px] text-zinc-600 font-bold">REMAINING</span>
-                      <span className={`text-[9px] font-black uppercase ${(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-500' :
-                        (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-500' :
-                          (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-500' : 'text-rose-600'
+                      <span className={`text-[9px] font-black uppercase ${(chain.max - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'text-emerald-500' :
+                        (chain.max - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'text-sky-500' :
+                          (chain.max - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'text-amber-500' : 'text-rose-600'
                         }`}>
-                        {(chain.target - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'Overkill' :
-                          (chain.target - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'Secured' :
-                            (chain.target - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'Possible' : 'Shortfall'}
+                        {(chain.max - chain.current) <= (tacticalAggregate?.totalAvailableHits || 0) ? 'Overkill' :
+                          (chain.max - chain.current) <= (tacticalAggregate?.totalProjectedHits1h || 0) ? 'Secured' :
+                            (chain.max - chain.current) <= (tacticalAggregate?.totalMaxPotentialHits || 0) ? 'Possible' : 'Shortfall'}
                       </span>
                     </div>
                   </div>

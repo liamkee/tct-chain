@@ -11,8 +11,8 @@ export class ChainMonitor implements DurableObject {
   // 内存态缓存 (用于去重)
   private factionId: string | null = null;
   private commanderKeyCache: string | null = null;
-  private lastChainCurrent: number = -1;
-  private lastChainTimeout: number = -1;
+  private lastChainCurrent: number = 0;
+  private lastChainTimeout: number = 0;
   private lastChainMax: number = 10;
   private lastChainDeadlineMs: number = 0;
   private memberStatusCache: Map<string, string> = new Map(); // id -> stringified status
@@ -63,9 +63,9 @@ export class ChainMonitor implements DurableObject {
 
       // Restore chain state (1 key instead of 4)
       const chain = storedMap.get('chain_state') ?? {};
-      this.lastChainCurrent = chain.current ?? -1;
-      this.lastChainTimeout = chain.timeout ?? -1;
-      this.lastChainMax = chain.max ?? 10;
+      this.lastChainCurrent = Math.max(0, chain.current ?? 0);
+      this.lastChainTimeout = Math.max(0, chain.timeout ?? 0);
+      this.lastChainMax = Math.max(10, chain.max ?? 10);
       this.lastChainDeadlineMs = chain.deadline_ms ?? 0;
 
       // 🚀 Load all members from consolidated single-key-per-member storage
