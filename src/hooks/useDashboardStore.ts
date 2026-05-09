@@ -128,7 +128,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       globalSelectedMembers: data.global_selected_members || [],
       lastUpdatedAt: data.lastUpdatedAt || Date.now(),
       serverClockOffset: offset,
-      masterSwitch: data.master_switch || 'OFF'
+      masterSwitch: data.master_switch || 'OFF',
+      tacticalAggregate: data.aggregate || null
     };
   }),
 

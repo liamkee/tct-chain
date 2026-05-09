@@ -35,6 +35,7 @@ function DashboardLayout() {
   const masterSwitch = useDashboardStore(state => state.masterSwitch);
   const lastUpdatedAt = useDashboardStore(state => state.lastUpdatedAt);
   const members = useDashboardStore(state => state.members);
+  const tacticalAggregate = useDashboardStore(state => state.tacticalAggregate);
   const serverClockOffset = useDashboardStore(state => state.serverClockOffset);
 
   const [timer, setTimer] = useState('5:00');
@@ -142,8 +143,8 @@ function DashboardLayout() {
               />
               <StatCard 
                 label="Strategic Reserves" 
-                value={`+${Object.values(members).filter(m => m.status?.state === 'Okay' && m.last_updated).length * 16}`} 
-                sub="Est. Xanax & FHC Potential" 
+                value={tacticalAggregate ? `+${tacticalAggregate.totalMaxPotentialHits - tacticalAggregate.totalAvailableHits}` : 'NO DATA'} 
+                sub="Est. Xanax, FHC & Refills" 
                 color="text-cyan-400" 
               />
             </div>

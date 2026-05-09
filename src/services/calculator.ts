@@ -48,6 +48,7 @@ export interface MemberTacticalData {
   };
 
   refill_used: boolean;
+  last_updated?: number;
 }
 
 export class TacticalCalculator {
@@ -171,8 +172,7 @@ export class TacticalCalculator {
   }
 
   /**
-   * 爆發力推演 (Burst Potential) - 現有 + Refill + 1 Xanax
-   * 不再計算 FHC，因為那不是常規戰術參考
+   * 爆發力推演 (Burst Potential) - 現有 + Refill + 1 Xanax + FHCs
    */
   static predictBurstPotential(member: MemberTacticalData) {
     const { energy_max, cooldowns, status } = member;
@@ -194,12 +194,22 @@ export class TacticalCalculator {
       xanaxCount++;
     }
 
+    // 3. FHC (Booster cooldown limit is 24h = 86400s)
+    let fhcCount = 0;
+    const currentBoosterCd = cooldowns?.booster || 0;
+    if (currentBoosterCd < TORN_RULES.BOOSTER_CD_THRESHOLD) {
+      // Calculate how many FHCs (6h = 21600s) can be taken
+      fhcCount = Math.ceil((TORN_RULES.BOOSTER_CD_THRESHOLD - currentBoosterCd) / 21600);
+      totalEnergy += fhcCount * (energy_max || 100);
+    }
+
     return {
       totalPotentialEnergy: totalEnergy,
       maxPotentialHits: Math.floor(totalEnergy / TORN_RULES.ENERGY_PER_HIT),
       resourcesUsed: {
         xanax: xanaxCount,
-        refill: !member.refill_used
+        refill: !member.refill_used,
+        fhc: fhcCount
       }
     };
   }
@@ -238,20 +248,23 @@ export class TacticalCalculator {
     };
   }
 
-  /**
-   * 聚合全幫派戰力數據
-   */
   static aggregate(members: Record<string, any>, selectedIds?: string[]) {
     let totalAvailableHits = 0;
-    let totalBurstHits = 0; // 改名：Burst Potential
+    let totalBurstHits = 0;
     let totalProjectedHits1h = 0;
     
     const targetMembers = selectedIds && selectedIds.length > 0 
       ? Object.entries(members).filter(([id]) => selectedIds.includes(id))
       : Object.entries(members);
 
+    let validMemberCount = 0;
+
     targetMembers.forEach(([_, data]) => {
       const memberData = data as MemberTacticalData;
+      // Skip members who have never been polled successfully
+      if (!memberData.last_updated) return;
+      
+      validMemberCount++;
       const current = TacticalCalculator.calculatePotential(memberData);
       const burst = TacticalCalculator.predictBurstPotential(memberData);
       const projected1h = TacticalCalculator.predictPotentialOverTime(memberData, 60);
@@ -267,7 +280,7 @@ export class TacticalCalculator {
       totalAvailableHits,
       totalMaxPotentialHits: totalBurstHits, // 保持 Key 名不變，以免前端崩潰
       totalProjectedHits1h,
-      memberCount: targetMembers.length
+      memberCount: validMemberCount
     };
   }
 }
