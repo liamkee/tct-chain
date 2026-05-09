@@ -197,8 +197,8 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isS
       </div>
 
       {/* Activity */}
-      <div className="col-span-1">
-        <span className={`text-[9px] font-black uppercase tracking-wider ${onlineColor}`}>{member.last_action?.status}</span>
+      <div className="col-span-1 flex items-center">
+        <span className={`text-[9px] font-black uppercase tracking-wider ${onlineColor} -mt-0.5`}>{member.last_action?.status}</span>
       </div>
 
       {/* Energy Column */}
