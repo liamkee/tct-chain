@@ -49,7 +49,9 @@ interface DashboardState {
   filters: {
     hideOffline: boolean;
     hideHospital: boolean;
-    sortByPower: boolean;
+    hideTraveling: boolean;
+    sortBy: 'name' | 'status' | 'activity' | 'power' | 'none';
+    sortOrder: 'asc' | 'desc';
   };
   
   // Actions
@@ -61,6 +63,7 @@ interface DashboardState {
   setTarget: (val: number) => void;
   setViewMode: (mode: 'grid' | 'list') => void;
   toggleFilter: (key: keyof DashboardState['filters']) => void;
+  setSort: (key: DashboardState['filters']['sortBy']) => void;
   addLog: (log: { ts: number, msg: string }) => void;
   setHeartbeat: (payload: any) => void;
 }
@@ -84,7 +87,9 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   filters: {
     hideOffline: false,
     hideHospital: false,
-    sortByPower: false, // 🚀 默认关闭排序，确保所有人立即可见
+    hideTraveling: false,
+    sortBy: 'none',
+    sortOrder: 'asc',
   },
 
   setFullSnapshot: (payload) => set((state) => {
@@ -161,6 +166,17 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   toggleFilter: (key) => set((state) => ({
     filters: { ...state.filters, [key]: !state.filters[key] }
   })),
+  setSort: (key) => set((state) => {
+    const isSameKey = state.filters.sortBy === key;
+    const nextOrder = isSameKey && state.filters.sortOrder === 'desc' ? 'asc' : 'desc';
+    return {
+      filters: {
+        ...state.filters,
+        sortBy: key,
+        sortOrder: nextOrder
+      }
+    };
+  }),
   addLog: (log) => set((state) => {
     const newLogs = [log, ...state.microLogs].slice(0, 20);
     return { microLogs: newLogs };

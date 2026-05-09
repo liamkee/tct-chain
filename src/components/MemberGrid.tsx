@@ -4,35 +4,70 @@ import { useDashboardStore } from '../hooks/useDashboardStore'
 export const MemberGrid: React.FC = () => {
   const members = useDashboardStore((state) => state.members);
   const globalSelectedMembers = useDashboardStore((state) => state.globalSelectedMembers);
-  const { filters, toggleFilter, viewMode, setViewMode } = useDashboardStore();
+  const { filters, toggleFilter, viewMode, setViewMode, setSort } = useDashboardStore();
 
   const processedMembers = Object.values(members)
     .filter(m => {
-      // Only filter based on explicit UI toggles (Offline/Hospital)
+      // Only filter based on explicit UI toggles (Offline/Hospital/Traveling)
       
       if (filters.hideOffline && m.last_action?.status !== 'Online') return false;
       if (filters.hideHospital && m.status?.state === 'Hospital') return false;
+      if (filters.hideTraveling && m.status?.state === 'Traveling') return false;
       return true;
     })
     .sort((a, b) => {
-      if (filters.sortByPower) {
-        // Purely descend by energy/power
-        const energyDiff = (b.energy || 0) - (a.energy || 0);
-        if (energyDiff !== 0) return energyDiff;
-        
-        // Tie-breaker: Online status
+      const isAsc = filters.sortOrder === 'asc';
+
+      // 1. Sort by Status (Life Status)
+      if (filters.sortBy === 'status') {
+        const getLifeWeight = (m: any) => {
+          if (m.status?.state === 'Okay') return 0;
+          if (m.status?.state === 'Hospital') return 1;
+          if (m.status?.state === 'Traveling') return 2;
+          if (m.status?.state === 'Jail') return 3;
+          return 4;
+        };
+        const diff = getLifeWeight(a) - getLifeWeight(b);
+        return isAsc ? -diff : diff; // DESC (default): Okay first
+      }
+
+      // 2. Sort by Name (Personnel)
+      if (filters.sortBy === 'name') {
+        const diff = (a.name || '').localeCompare(b.name || '');
+        return isAsc ? -diff : diff; // DESC (default): A-Z first
+      }
+
+      // 3. Sort by Activity
+      if (filters.sortBy === 'activity') {
         const getStatusWeight = (m: any) => {
           const s = m.last_action?.status;
           if (s === 'Online') return 0;
           if (s === 'Idle') return 1;
           return 2;
         };
-        return getStatusWeight(a) - getStatusWeight(b);
+        const statusDiff = getStatusWeight(a) - getStatusWeight(b);
+        const diff = statusDiff !== 0 ? statusDiff : (a.last_action?.seconds || 0) - (b.last_action?.seconds || 0);
+        return isAsc ? -diff : diff; // DESC (default): Online/Recent first
       }
+
+      // 4. Sort by Power (Energy)
+      if (filters.sortBy === 'power') {
+        const diff = (b.energy || 0) - (a.energy || 0);
+        return isAsc ? -diff : diff; // DESC (default): High Energy first
+      }
+
+      // Default Tie-breaker: Online first, then Energy DESC
       if (a.last_action?.status === 'Online' && b.last_action?.status !== 'Online') return -1;
       if (a.last_action?.status !== 'Online' && b.last_action?.status === 'Online') return 1;
-      return 0;
+      return (b.energy || 0) - (a.energy || 0);
     });
+
+
+
+  const getSortIcon = (key: typeof filters.sortBy) => {
+    if (filters.sortBy !== key) return null;
+    return filters.sortOrder === 'asc' ? '↑' : '↓';
+  };
 
   const controls = (
     <div className="flex items-center justify-end gap-2 mb-4 px-4 md:px-6">
@@ -46,11 +81,31 @@ export const MemberGrid: React.FC = () => {
         onClick={() => toggleFilter('hideHospital')}
         label="HIDE IN HOSP"
       />
+      <FilterButton
+        active={filters.hideTraveling}
+        onClick={() => toggleFilter('hideTraveling')}
+        label="HIDE TRAVELING"
+      />
       <div className="h-4 w-px bg-white/10 mx-2" />
       <FilterButton
-        active={filters.sortByPower}
-        onClick={() => toggleFilter('sortByPower')}
-        label="ENERGY DESC"
+        active={filters.sortBy === 'name'}
+        onClick={() => setSort('name')}
+        label={`NAME ${getSortIcon('name') || ''}`}
+      />
+      <FilterButton
+        active={filters.sortBy === 'status'}
+        onClick={() => setSort('status')}
+        label={`STATUS ${getSortIcon('status') || ''}`}
+      />
+      <FilterButton
+        active={filters.sortBy === 'power'}
+        onClick={() => setSort('power')}
+        label={`ENERGY ${getSortIcon('power') || ''}`}
+      />
+      <FilterButton
+        active={filters.sortBy === 'activity'}
+        onClick={() => setSort('activity')}
+        label={`ACTIVITY ${getSortIcon('activity') || ''}`}
       />
 
       <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg border border-white/5 ml-4">
@@ -79,10 +134,30 @@ export const MemberGrid: React.FC = () => {
         <div className="flex flex-col gap-1 p-2 md:p-4">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5">
-            <div className="col-span-3">Personnel</div>
-            <div className="col-span-2">Life Status</div>
-            <div className="col-span-2">Activity</div>
-            <div className="col-span-3">Energy</div>
+            <button 
+              onClick={() => setSort('name')}
+              className={`col-span-3 text-left hover:text-zinc-100 transition-colors flex items-center gap-1 ${filters.sortBy === 'name' ? 'text-indigo-400' : ''}`}
+            >
+              Personnel {getSortIcon('name')}
+            </button>
+            <button 
+              onClick={() => setSort('status')}
+              className={`col-span-2 text-left hover:text-zinc-100 transition-colors flex items-center gap-1 ${filters.sortBy === 'status' ? 'text-indigo-400' : ''}`}
+            >
+              Life Status {getSortIcon('status')}
+            </button>
+            <button 
+              onClick={() => setSort('activity')}
+              className={`col-span-2 text-left hover:text-zinc-100 transition-colors flex items-center gap-1 ${filters.sortBy === 'activity' ? 'text-indigo-400' : ''}`}
+            >
+              Activity {getSortIcon('activity')}
+            </button>
+            <button 
+              onClick={() => setSort('power')}
+              className={`col-span-3 text-left hover:text-zinc-100 transition-colors flex items-center gap-1 ${filters.sortBy === 'power' ? 'text-indigo-400' : ''}`}
+            >
+              Energy {getSortIcon('power')}
+            </button>
             <div className="col-span-2 text-right">Cooldowns</div>
           </div>
           {processedMembers.map((member) => (

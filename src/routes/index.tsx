@@ -200,7 +200,7 @@ function DashboardContent() {
 
         {/* Connecting State */}
         {!isConnected && (
-          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm mx-3 md:mx-4 my-6 rounded-3xl">
+          <div className="absolute inset-0 z-60 flex items-center justify-center bg-black/40 backdrop-blur-sm mx-3 md:mx-4 my-6 rounded-3xl">
              <div className="flex flex-col items-center gap-4">
                 <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
                 <span className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Establishing Uplink...</span>
