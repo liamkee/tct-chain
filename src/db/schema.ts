@@ -19,3 +19,13 @@ export const members = sqliteTable('Members', {
   discordIdIdx: index('discord_id_idx').on(table.discord_id),
   factionIdIdx: index('faction_id_idx').on(table.faction_id),
 }));
+export const chainHistory = sqliteTable('ChainHistory', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  faction_id: integer('faction_id').notNull().references(() => factions.id),
+  timestamp: integer('timestamp').notNull(),
+  chain_count: integer('chain_count').notNull(),
+  hpm: integer('hpm').notNull(),
+  eta: integer('eta'),
+  recent_hpm: integer('recent_hpm'),
+  metadata: text('metadata'),
+});

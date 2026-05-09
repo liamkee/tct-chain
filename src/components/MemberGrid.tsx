@@ -4,54 +4,122 @@ import { useDashboardStore } from '../hooks/useDashboardStore'
 export const MemberGrid: React.FC = () => {
   const members = useDashboardStore((state) => state.members);
   const globalSelectedMembers = useDashboardStore((state) => state.globalSelectedMembers);
-  const filters = useDashboardStore((state) => state.filters);
+  const { filters, toggleFilter, viewMode, setViewMode } = useDashboardStore();
 
   const processedMembers = Object.values(members)
     .filter(m => {
+      // If Power First is on, only show members who have submitted an API key (have live data)
+      if (filters.sortByPower && (!m.last_action || m.energy === undefined)) return false;
+      
       if (filters.hideOffline && m.last_action?.status !== 'Online') return false;
       if (filters.hideHospital && m.status?.state === 'Hospital') return false;
       return true;
     })
     .sort((a, b) => {
-    if (filters.sortByPower) {
-      // 1. 状态优先级：Online (0) > Idle (1) > Offline (2)
-      const getStatusWeight = (m: any) => {
-        const s = m.last_action?.status;
-        if (s === 'Online') return 0;
-        if (s === 'Idle') return 1;
-        return 2;
-      };
-
-      const statusDiff = getStatusWeight(a) - getStatusWeight(b);
-      if (statusDiff !== 0) return statusDiff;
-
-      // 2. 如果状态相同，看最后活跃秒数 (小的在前)
-      const secA = a.last_action?.seconds ?? 999999;
-      const secB = b.last_action?.seconds ?? 999999;
-      if (secA !== secB) return secA - secB;
-
-      // 3. 如果还是相同，能量高的在前
-      return (b.energy || 0) - (a.energy || 0);
-    }
-      
-      // 默认排序：在线状态优先
+      if (filters.sortByPower) {
+        // Purely descend by energy/power
+        const energyDiff = (b.energy || 0) - (a.energy || 0);
+        if (energyDiff !== 0) return energyDiff;
+        
+        // Tie-breaker: Online status
+        const getStatusWeight = (m: any) => {
+          const s = m.last_action?.status;
+          if (s === 'Online') return 0;
+          if (s === 'Idle') return 1;
+          return 2;
+        };
+        return getStatusWeight(a) - getStatusWeight(b);
+      }
       if (a.last_action?.status === 'Online' && b.last_action?.status !== 'Online') return -1;
       if (a.last_action?.status !== 'Online' && b.last_action?.status === 'Online') return 1;
       return 0;
     });
 
+  const controls = (
+    <div className="flex items-center justify-end gap-2 mb-4 px-4 md:px-6">
+      <FilterButton
+        active={filters.hideOffline}
+        onClick={() => toggleFilter('hideOffline')}
+        label="HIDE OFFLINE"
+      />
+      <FilterButton
+        active={filters.hideHospital}
+        onClick={() => toggleFilter('hideHospital')}
+        label="HIDE IN HOSP"
+      />
+      <div className="h-4 w-px bg-white/10 mx-2" />
+      <FilterButton
+        active={filters.sortByPower}
+        onClick={() => toggleFilter('sortByPower')}
+        label="ENERGY DESC"
+      />
+
+      <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg border border-white/5 ml-4">
+        <button
+          onClick={() => setViewMode('grid')}
+          className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+          title="Grid View"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>
+        </button>
+        <button
+          onClick={() => setViewMode('list')}
+          className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+          title="List View"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="21" y1="6" y2="6" /><line x1="3" x2="21" y1="12" y2="12" /><line x1="3" x2="21" y1="18" y2="18" /></svg>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4 p-2 md:p-4">
-      {processedMembers.map((member) => (
-        <MemberCard 
-          key={member.id} 
-          member={member} 
-          isSelected={globalSelectedMembers.includes(member.id)}
-        />
-      ))}
+    <div className="flex flex-col">
+      {controls}
+      {viewMode === 'list' ? (
+        <div className="flex flex-col gap-1 p-2 md:p-4">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5">
+            <div className="col-span-3">Personnel</div>
+            <div className="col-span-2">Life Status</div>
+            <div className="col-span-2">Activity</div>
+            <div className="col-span-3">Energy</div>
+            <div className="col-span-2 text-right">Cooldowns</div>
+          </div>
+          {processedMembers.map((member) => (
+            <MemberRow 
+              key={member.id} 
+              member={member} 
+              isSelected={globalSelectedMembers.includes(member.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4 p-2 md:p-4">
+          {processedMembers.map((member) => (
+            <MemberCard 
+              key={member.id} 
+              member={member} 
+              isSelected={globalSelectedMembers.includes(member.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
+
+const FilterButton: React.FC<{ active: boolean, onClick: () => void, label: string }> = ({ active, onClick, label }) => (
+  <button
+    onClick={onClick}
+    className={`px-3 py-1.5 rounded-md text-[10px] font-black tracking-tighter transition-all border ${active
+        ? 'bg-indigo-500 text-white border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
+        : 'bg-zinc-800/50 text-zinc-500 border-white/5 hover:border-white/20'
+      }`}
+  >
+    {label}
+  </button>
+);
 
 const MemberCard: React.FC<{ member: any, isSelected: boolean }> = ({ member, isSelected }) => {
   const statusColor = member.status?.state === 'Okay' ? 'bg-emerald-500' : 
@@ -128,6 +196,80 @@ const MemberCard: React.FC<{ member: any, isSelected: boolean }> = ({ member, is
         <span className={`text-[10px] font-black ${member.refill_used ? 'text-rose-400' : 'text-emerald-400'}`}>
           {member.refill_used ? 'USED' : 'READY'}
         </span>
+      </div>
+    </div>
+  );
+};
+
+const MemberRow: React.FC<{ member: any, isSelected: boolean }> = ({ member, isSelected }) => {
+  const statusColor = member.status?.state === 'Okay' ? 'text-emerald-400' : 
+                     member.status?.state === 'Hospital' ? 'text-rose-400' : 'text-amber-400';
+  
+  const onlineColor = member.last_action?.status === 'Online' ? 'text-green-400' : 
+                     member.last_action?.status === 'Idle' ? 'text-amber-400' : 'text-zinc-500';
+
+  return (
+    <div className={`grid grid-cols-12 gap-4 items-center px-4 py-2 rounded-lg border border-white/5 bg-zinc-900/30 hover:bg-zinc-800/50 transition-all ${isSelected ? 'ring-1 ring-indigo-500 bg-indigo-500/5' : ''}`}>
+      {/* Personnel */}
+      <div className="col-span-3 flex items-center gap-3">
+        <span className="font-bold text-zinc-100 truncate text-sm">{member.name}</span>
+        <span className="text-[10px] text-zinc-600 font-mono">#{member.id}</span>
+      </div>
+
+      {/* Life Status */}
+      <div className="col-span-2 flex items-center gap-2">
+        <div className={`h-1.5 w-1.5 rounded-full ${member.status?.state === 'Okay' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+        <span className={`text-xs font-bold ${statusColor}`}>{member.status?.state}</span>
+      </div>
+
+      {/* Activity */}
+      <div className="col-span-2">
+        <span className={`text-[10px] font-black uppercase tracking-wider ${onlineColor}`}>{member.last_action?.status}</span>
+        {member.last_action?.status !== 'Online' && (
+          <span className="text-zinc-600 text-[9px] ml-2 font-mono">
+            {member.last_action?.seconds && member.last_action.seconds > 3600 
+              ? `${Math.floor(member.last_action.seconds / 3600)}h` 
+              : `${Math.floor((member.last_action?.seconds || 0) / 60)}m`}
+          </span>
+        )}
+      </div>
+
+      {/* Energy */}
+      <div className="col-span-3 flex items-center gap-3">
+        <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-linear-to-r from-indigo-500 to-cyan-400 transition-all duration-1000"
+            style={{ width: `${((member.energy || 0) / (member.energy_max || 100)) * 100}%` }}
+          />
+        </div>
+        <span className="text-[10px] font-mono text-zinc-400 min-w-[45px] text-right">
+          {member.energy || 0}/{member.energy_max || 100}
+        </span>
+      </div>
+
+      {/* Cooldowns */}
+      <div className="col-span-2 flex justify-end gap-2">
+        {(member.cooldowns?.drug || 0) > 0 && (
+          <div className="w-6 h-6 rounded bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-[8px] font-bold text-orange-400" title="Drug CD">
+            D
+          </div>
+        )}
+        {(member.cooldowns?.medical || 0) > 0 && (
+          <div className="w-6 h-6 rounded bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-[8px] font-bold text-rose-400" title="Med CD">
+            M
+          </div>
+        )}
+        {(member.cooldowns?.booster || 0) > 0 && (
+          <div className="w-6 h-6 rounded bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-[8px] font-bold text-indigo-400" title="Boost CD">
+            B
+          </div>
+        )}
+        <div className={`w-6 h-6 rounded flex items-center justify-center text-[8px] font-bold border transition-all ${member.refill_used
+            ? 'bg-zinc-800 border-white/5 text-zinc-600'
+            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.1)]'
+          }`} title={member.refill_used ? 'Refill Used' : 'Refill Ready'}>
+          R
+        </div>
       </div>
     </div>
   );

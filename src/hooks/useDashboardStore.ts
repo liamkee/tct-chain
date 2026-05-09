@@ -27,6 +27,7 @@ interface DashboardState {
   microLogs: Array<{ ts: number, msg: string }>;
   lastUpdatedAt: number;
   serverClockOffset: number; // DO Time - Local Time
+  masterSwitch: 'ON' | 'OFF';
   
   // Phase 3 推演数据
   hpm: number;
@@ -43,6 +44,7 @@ interface DashboardState {
   // UI 状态
   isConnected: boolean;
   isStale: boolean;
+  viewMode: 'grid' | 'list';
   filters: {
     hideOffline: boolean;
     hideHospital: boolean;
@@ -56,6 +58,7 @@ interface DashboardState {
   setSquad: (members: string[]) => void;
   setConnection: (status: boolean) => void;
   setTarget: (val: number) => void;
+  setViewMode: (mode: 'grid' | 'list') => void;
   toggleFilter: (key: keyof DashboardState['filters']) => void;
   addLog: (log: { ts: number, msg: string }) => void;
   setHeartbeat: (payload: any) => void; // 🚀 新增心跳处理
@@ -68,6 +71,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   microLogs: [],
   lastUpdatedAt: 0,
   serverClockOffset: 0,
+  masterSwitch: 'OFF',
   hpm: 0,
   recentHPM: 0,
   trend: 'STABLE',
@@ -75,6 +79,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   tacticalAggregate: null,
   isConnected: false,
   isStale: false,
+  viewMode: 'list',
   filters: {
     hideOffline: false,
     hideHospital: false,
@@ -97,21 +102,28 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     };
 
     const memberSource = data.members || data;
-    Object.entries(memberSource).forEach(([key, value]) => {
-      if (key.startsWith('member_') && key.endsWith('_status')) {
+    
+    // First, collect all unique member IDs
+    const memberIds = new Set<string>();
+    Object.keys(memberSource).forEach(key => {
+      if (key.startsWith('member_')) {
         const id = key.split('_')[1];
-        members[id] = {
-          ...members[id],
-          id,
-          name: memberSource[`member_${id}_name`], 
-          status: value,
-          last_action: memberSource[`member_${id}_last_action`],
-          energy: memberSource[`member_${id}_energy`],
-          energy_max: memberSource[`member_${id}_energy_max`],
-          refill_used: memberSource[`member_${id}_refill_used`],
-          cooldowns: memberSource[`member_${id}_cooldowns`],
-        };
+        if (id) memberIds.add(id);
       }
+    });
+
+    // Then, build member objects for each ID
+    memberIds.forEach(id => {
+      members[id] = {
+        id,
+        name: memberSource[`member_${id}_name`] || 'Unknown',
+        status: memberSource[`member_${id}_status`],
+        last_action: memberSource[`member_${id}_last_action`],
+        energy: memberSource[`member_${id}_energy`] || 0,
+        energy_max: memberSource[`member_${id}_energy_max`] || 100,
+        refill_used: memberSource[`member_${id}_refill_used`] || false,
+        cooldowns: memberSource[`member_${id}_cooldowns`] || { drug: 0, medical: 0, booster: 0 },
+      };
     });
 
     set({ 
@@ -120,7 +132,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       microLogs: logs,
       globalSelectedMembers: data.global_selected_members || [],
       lastUpdatedAt: data.lastUpdatedAt || Date.now(),
-      serverClockOffset: offset
+      serverClockOffset: offset,
+      masterSwitch: data.master_switch || 'OFF'
     });
   },
 
@@ -154,6 +167,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     chain: { ...state.chain, target: val } 
   })),
 
+  setViewMode: (mode) => set({ viewMode: mode }),
+
   toggleFilter: (key) => set((state) => ({
     filters: { ...state.filters, [key]: !state.filters[key] }
   })),
@@ -175,7 +190,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       eta: payload.eta,
       tacticalAggregate: payload.aggregate || state.tacticalAggregate,
       microLogs: payload.microLogs || state.microLogs,
-      serverClockOffset: offset
+      serverClockOffset: offset,
+      masterSwitch: payload.master_switch || state.masterSwitch
     };
   })
 }));

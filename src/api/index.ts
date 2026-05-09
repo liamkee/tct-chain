@@ -36,6 +36,7 @@ api.post('/test/mock-login', async (c) => {
   const token = await sign({
     torn_id: 1,
     discord_id: '123',
+    faction_id: c.env.FACTION_ID || '53822',
     role: role || 'admin',
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
   }, c.env.JWT_SECRET, 'HS256');

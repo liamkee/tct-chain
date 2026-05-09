@@ -28,23 +28,23 @@ export interface CooldownRefreshFlags {
 
 export interface MemberStatus {
   state: string;
-  status: string;
-  until?: number;
+  until: number;
 }
 
 export interface MemberTacticalData {
-  energy: {
-    current: number;
-    max: number;
-  };
+  id: string;
+  name: string;
+  energy: number;
+  energy_max: number;
   cooldowns: {
     drug: number;
     booster: number;
     medical: number;
   };
+  status: MemberStatus;
   last_action: {
     status: string;
-    relative: string;
+    seconds: number;
   };
   is_donator: boolean;
   refill_used: boolean;
@@ -139,12 +139,12 @@ export class TacticalCalculator {
    * 基础能量计算 (Internal helper for deduplication)
    */
   private static getBaseAvailableEnergy(member: MemberTacticalData): number {
-    const { energy, is_donator, refill_used } = member;
-    let total = energy.current;
+    const { energy, energy_max, is_donator, refill_used } = member;
+    let total = energy || 0;
     
     // 如果 Refill 没用过，计入一次
     if (!refill_used) {
-      total += getItemEnergy(TORN_ITEMS.REFILL, is_donator, energy.max);
+      total += getItemEnergy(TORN_ITEMS.REFILL, is_donator, energy_max);
     }
     return total;
   }
@@ -153,10 +153,12 @@ export class TacticalCalculator {
    * 计算单个成员的即战力 (Current Available)
    */
   static calculatePotential(member: MemberTacticalData) {
-    const { energy, is_donator, last_action } = member;
+    const { energy_max, is_donator, last_action, status } = member;
     
     // 1. 判断是否“可出击”
-    const isAvailable = last_action.status !== 'Offline' && !last_action.status.includes('Hospital');
+    // Offline can still hit if they just went offline, but usually we consider them unavailable
+    // Hospital is definitely unavailable
+    const isAvailable = last_action.status !== 'Offline' && status.state === 'Okay';
     
     // 2. 计算当前即战力
     const totalEnergy = this.getBaseAvailableEnergy(member);
@@ -165,7 +167,7 @@ export class TacticalCalculator {
     return {
       isAvailable,
       availableHits,
-      maxEnergy: energy.max || (is_donator ? TORN_RULES.BASE_ENERGY_DONATOR : TORN_RULES.BASE_ENERGY_NORMAL)
+      maxEnergy: energy_max || (is_donator ? TORN_RULES.BASE_ENERGY_DONATOR : TORN_RULES.BASE_ENERGY_NORMAL)
     };
   }
 
@@ -173,18 +175,18 @@ export class TacticalCalculator {
    * 极限战力推演 (Max Potential Prediction) - 即时爆种
    */
   static predictMaxPotential(member: MemberTacticalData) {
-    const { energy, cooldowns, is_donator } = member;
+    const { energy_max, cooldowns, is_donator } = member;
     let totalEnergy = this.getBaseAvailableEnergy(member);
 
     // Booster (FHC) 推演
-    let tempBoosterCD = cooldowns.booster;
+    let tempBoosterCD = cooldowns?.booster || 0;
     let fhcCount = 0;
     while (tempBoosterCD < TORN_RULES.BOOSTER_MAX_MINUTES) {
-      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy.max);
+      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy_max);
       tempBoosterCD += TORN_ITEMS.FHC.cooldown.base;
       fhcCount++;
       if (tempBoosterCD === TORN_RULES.BOOSTER_MAX_MINUTES) {
-        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy.max);
+        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy_max);
         fhcCount++;
         break;
       }
@@ -192,7 +194,7 @@ export class TacticalCalculator {
 
     // Drug (Xanax) 推演
     let xanaxCount = 0;
-    if (cooldowns.drug === 0) {
+    if ((cooldowns?.drug || 0) === 0) {
       totalEnergy += getItemEnergy(TORN_ITEMS.XANAX, is_donator);
       xanaxCount++;
     }
@@ -213,32 +215,38 @@ export class TacticalCalculator {
    * 计算在未来 targetMinutes 分钟内，该成员理论上能提供的最大击数。
    */
   static predictPotentialOverTime(member: MemberTacticalData, targetMinutes: number) {
-    const { energy, cooldowns, is_donator } = member;
+    const { energy_max, cooldowns, is_donator, status } = member;
     
     // 1. 基础可用能量 (当前 + 未使用的 Refill)
     let totalEnergy = this.getBaseAvailableEnergy(member);
 
     // 2. 自然回复 (Regen)
+    // If in hospital, they don't gain energy until they are out.
+    const now = Math.floor(Date.now() / 1000);
+    const hospRemainingSeconds = Math.max(0, (status.until || 0) - now);
+    const hospRemainingMinutes = Math.ceil(hospRemainingSeconds / 60);
+    
+    const effectiveRegenMinutes = Math.max(0, targetMinutes - hospRemainingMinutes);
     const regenInterval = is_donator ? TORN_RULES.REGEN_INTERVAL_DONATOR : TORN_RULES.REGEN_INTERVAL_NORMAL;
-    const totalRegenEnergy = Math.floor(targetMinutes / regenInterval) * TORN_RULES.REGEN_AMOUNT;
+    const totalRegenEnergy = Math.floor(effectiveRegenMinutes / regenInterval) * TORN_RULES.REGEN_AMOUNT;
     totalEnergy += totalRegenEnergy;
 
     // 3. 资源释放推演 (随着时间流逝，CD 会下降)
-    let effectiveBoosterCD = Math.max(0, cooldowns.booster - targetMinutes);
+    let effectiveBoosterCD = Math.max(0, (cooldowns?.booster || 0) - targetMinutes);
     let fhcCount = 0;
     while (effectiveBoosterCD < TORN_RULES.BOOSTER_MAX_MINUTES) {
-      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy.max);
+      totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy_max);
       effectiveBoosterCD += TORN_ITEMS.FHC.cooldown.base;
       fhcCount++;
       if (effectiveBoosterCD === TORN_RULES.BOOSTER_MAX_MINUTES) {
-        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy.max);
+        totalEnergy += getItemEnergy(TORN_ITEMS.FHC, is_donator, energy_max);
         fhcCount++;
         break;
       }
     }
 
     let xanaxCount = 0;
-    if (cooldowns.drug <= targetMinutes) {
+    if ((cooldowns?.drug || 0) <= targetMinutes) {
       totalEnergy += getItemEnergy(TORN_ITEMS.XANAX, is_donator);
       xanaxCount++;
     }
