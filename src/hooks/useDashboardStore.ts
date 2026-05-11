@@ -30,6 +30,7 @@ interface DashboardState {
   serverClockOffset: number; // DO Time - Local Time
   masterSwitch: 'ON' | 'OFF';
   
+  
   // Phase 3 推演数据
   hpm: number;
   recentHPM: number;
@@ -50,6 +51,9 @@ interface DashboardState {
     hideTraveling: boolean;
     sortBy: 'name' | 'status' | 'activity' | 'power' | 'refill' | 'none';
     sortOrder: 'asc' | 'desc';
+    excludeXanax: boolean;
+    excludeFHC: boolean;
+    excludeRefill: boolean;
   };
   
   // Actions
@@ -59,7 +63,9 @@ interface DashboardState {
   setSquad: (members: string[]) => void;
   setConnection: (status: boolean) => void;
   setStale: (status: boolean) => void;
+  toggleCalcSetting: (key: 'excludeXanax' | 'excludeFHC' | 'excludeRefill') => void;
   setTarget: (val: number) => void;
+  
   toggleFilter: (key: keyof DashboardState['filters']) => void;
   setSort: (key: DashboardState['filters']['sortBy']) => void;
   addLog: (log: { ts: number, msg: string }) => void;
@@ -75,6 +81,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   serverClockOffset: 0,
   masterSwitch: 'OFF',
   hpm: 0,
+  
   recentHPM: 0,
   trend: 'STABLE',
   eta: -1,
@@ -87,6 +94,9 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     hideTraveling: false,
     sortBy: 'activity',
     sortOrder: 'desc',
+    excludeXanax: false,
+    excludeFHC: false,
+    excludeRefill: false,
   },
 
   setFullSnapshot: (payload) => set((state) => {
@@ -129,6 +139,15 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       lastUpdatedAt: data.lastUpdatedAt || Date.now(),
       serverClockOffset: offset,
       masterSwitch: data.master_switch || 'OFF',
+      filters: {
+        ...state.filters,
+        excludeXanax: data.calc_settings?.excludeXanax ?? state.filters.excludeXanax,
+        excludeFHC: data.calc_settings?.excludeFHC ?? state.filters.excludeFHC,
+        excludeRefill: data.calc_settings?.excludeRefill ?? state.filters.excludeRefill,
+        hideOffline: data.calc_settings?.hideOffline ?? state.filters.hideOffline,
+        hideHospital: data.calc_settings?.hideHospital ?? state.filters.hideHospital,
+        hideTraveling: data.calc_settings?.hideTraveling ?? state.filters.hideTraveling,
+      },
       tacticalAggregate: data.aggregate || null
     };
   }),
@@ -158,6 +177,10 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setSquad: (members) => set({ globalSelectedMembers: members }),
   setConnection: (status) => set({ isConnected: status }),
   setStale: (status) => set({ isStale: status }),
+
+  toggleCalcSetting: (key) => set((state) => ({
+    filters: { ...state.filters, [key]: !state.filters[key] }
+  })),
   setTarget: (val: number) => set((state) => ({ 
     chain: { ...state.chain, max: val } 
   })),
@@ -213,7 +236,18 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       tacticalAggregate: data.aggregate || state.tacticalAggregate,
       microLogs: data.microLogs || state.microLogs,
       serverClockOffset: offset,
-      masterSwitch: data.master_switch || state.masterSwitch
+      masterSwitch: data.master_switch || state.masterSwitch,
+      filters: {
+        ...state.filters,
+        ...(data.calc_settings ? {
+          excludeXanax: data.calc_settings.excludeXanax ?? state.filters.excludeXanax,
+          excludeFHC: data.calc_settings.excludeFHC ?? state.filters.excludeFHC,
+          excludeRefill: data.calc_settings.excludeRefill ?? state.filters.excludeRefill,
+          hideOffline: data.calc_settings.hideOffline ?? state.filters.hideOffline,
+          hideHospital: data.calc_settings.hideHospital ?? state.filters.hideHospital,
+          hideTraveling: data.calc_settings.hideTraveling ?? state.filters.hideTraveling,
+        } : {})
+      }
     };
   })
 }));

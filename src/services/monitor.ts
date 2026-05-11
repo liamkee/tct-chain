@@ -29,6 +29,13 @@ export class ChainMonitor implements DurableObject {
   private tokenBuckets: Map<string, { tokens: number, resetAt: number }> = new Map(); // 纯内存 Token bucket
   private pendingPolls: Map<string, number> = new Map(); // Action-Driven Polling 追踪
   private masterSwitch: 'ON' | 'OFF' = 'OFF';
+  private calcSettings: { excludeXanax: boolean, excludeFHC: boolean, excludeRefill: boolean } = {
+    excludeXanax: false,
+    excludeFHC: false,
+    excludeRefill: false
+  };
+  
+  
 
   constructor(state: DurableObjectState, env: Env['Bindings']) {
     this.state = state;
@@ -42,12 +49,22 @@ export class ChainMonitor implements DurableObject {
         'chain_state',
         'manual_offset',
         'master_switch',
+        'calc_settings',
       ]);
 
       const storedMap = stored as Map<string, any>;
       this.factionId = storedMap.get('faction_id') ?? null;
       this.manualOffset = storedMap.get('manual_offset') ?? 0;
       this.masterSwitch = storedMap.get('master_switch') ?? 'OFF';
+      const defaultSettings = { 
+        excludeXanax: false, 
+        excludeFHC: false, 
+        excludeRefill: false,
+        hideOffline: false,
+        hideHospital: false,
+        hideTraveling: false
+      };
+      this.calcSettings = { ...defaultSettings, ...(storedMap.get('calc_settings') || {}) };
 
       // Restore system state (1 key instead of 8)
       const sys = storedMap.get('system_state') ?? {};
@@ -72,7 +89,9 @@ export class ChainMonitor implements DurableObject {
       const allStorage = await this.state.storage.list({ prefix: 'member_' });
       for (const [key, value] of allStorage.entries()) {
         const id = key.replace('member_', '');
-        this.memberDataCache.set(id, value as any);
+        const memberData = value as any;
+        if (!memberData.id) memberData.id = id;
+        this.memberDataCache.set(id, memberData);
       }
       console.log(`[DO] Startup: Loaded ${this.memberDataCache.size} members into memory cache.`);
       this.microLogs.push({ ts: Date.now(), msg: `Engine loaded: ${this.memberDataCache.size} cached members` });
@@ -334,6 +353,18 @@ export class ChainMonitor implements DurableObject {
         await this.state.storage.put('global_selected_members', data.members);
         this.broadcastToWebSockets({ type: 'SQUAD_UPDATED', members: data.members });
       }
+      if (data.type === 'UPDATE_CALC_SETTINGS') {
+        this.calcSettings = { ...this.calcSettings, ...data.settings };
+        await this.state.storage.put('calc_settings', this.calcSettings);
+        // Force a recalculation and broadcast
+        const snapshot = await this.getFullSnapshot();
+        this.broadcastToWebSockets({ type: 'HEARTBEAT', data: snapshot });
+      }
+      if (data.type === 'REQ_SYNC') {
+        console.log('[DO] Manual Sync Requested');
+        this.microLogs.push({ ts: Date.now(), msg: 'Manual Sync Requested by Admin' });
+        await this.state.storage.setAlarm(Date.now());
+      }
     } catch (e) {
       console.error('[WS] Message parse error', e);
     }
@@ -372,9 +403,8 @@ export class ChainMonitor implements DurableObject {
     }
 
     // --- Tactical Aggregate ---
-    // For now we use all predicted members as the pool
-    const selectedIds = Object.keys(predicted.members);
-    const aggregate = (await import('../services/calculator')).TacticalCalculator.aggregate(predicted.members, selectedIds);
+    const aggregate = TacticalCalculator.aggregate(predicted.members, Object.keys(predicted.members), this.calcSettings);
+  
 
     return {
       members: predicted.members,
@@ -392,6 +422,7 @@ export class ChainMonitor implements DurableObject {
       lastUpdatedAt: this.lastUpdatedAt,
       microLogs: this.microLogs,
       master_switch: this.masterSwitch,
+      calc_settings: this.calcSettings,
       do_server_time_ms: Date.now()
     };
   }
@@ -422,7 +453,7 @@ export class ChainMonitor implements DurableObject {
 
       try {
         // 3. Fetch Faction Basic
-        const res = await fetch(`https://api.torn.com/faction/${this.factionId}?selections=basic&key=${apiKey}`, { signal: controller.signal });
+        const res = await fetch(`https://api.torn.com/faction/${this.factionId}?selections=basic,chain&key=${apiKey}`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
@@ -431,6 +462,8 @@ export class ChainMonitor implements DurableObject {
 
         const chainData = data.chain;
         const membersData = data.members || {};
+        this.microLogs.push({ ts: Date.now(), msg: `Faction sync: ${Object.keys(membersData).length} members status updated.` });
+        if (this.microLogs.length > 20) this.microLogs.shift();
         const storageUpdates: Record<string, any> = {};
         let hasChanges = false;
 
@@ -474,29 +507,33 @@ export class ChainMonitor implements DurableObject {
 
         // 6. Queue Individual Polls (Action-Driven)
         const activeMemberKeys = new Map((dbMembers || []).map((m: any) => [m.torn_id.toString(), m.api_key]));
-        const membersToUpdate = Object.keys(membersData).filter(id => {
-          if (!activeMemberKeys.get(id)) return false;
+        const batch: any[] = [];
+
+        Object.keys(membersData).forEach(id => {
+          const apiKey = activeMemberKeys.get(id);
+          if (!apiKey) return;
+
           const m = membersData[id];
           const existing = this.memberDataCache.get(id);
 
-          // 🚀 Poll if: No data yet, OR status changed, OR action timestamp changed
           const isInitial = !existing || !existing.last_updated;
-          const statusChanged = existing && m.status?.state !== existing.status?.state;
-          const actionChanged = existing && m.last_action?.timestamp !== existing.last_action?.timestamp;
+          const statusChanged = !existing || JSON.stringify(existing.status) !== JSON.stringify(m.status);
+          const actionChanged = !existing || existing.last_action?.status !== m.last_action?.status;
+          const isStale = existing && (Math.floor(Date.now() / 1000) - (existing.last_updated || 0)) > 300; // 5 mins
 
-          if (isInitial || statusChanged || actionChanged) {
-            const pendingKey = `${id}_${m.last_action?.timestamp}_${m.status?.state}`;
-            if (this.pendingPolls.has(pendingKey)) return false;
-            this.pendingPolls.set(pendingKey, Date.now());
-            return true;
+          if (isInitial || statusChanged || actionChanged || isStale) {
+            // Limit pending polls to avoid spamming the queue if it's slow
+            const lastPoll = this.pendingPolls.get(id) || 0;
+            if (Date.now() - lastPoll < 60000) return; // Max 1 poll per minute per member
+
+            batch.push({
+              body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now() }
+            });
+            this.pendingPolls.set(id, Date.now());
           }
-          return false;
         });
 
-        if (membersToUpdate.length > 0) {
-          const batch = membersToUpdate.map(id => ({
-            body: { tornId: id, apiKey: activeMemberKeys.get(id), factionId: this.factionId, ts: Date.now() }
-          }));
+        if (batch.length > 0) {
           await this.env.MEMBER_QUEUE.sendBatch(batch);
           console.log(`[DO] Queued ${batch.length} member polls.`);
         }
@@ -527,6 +564,7 @@ export class ChainMonitor implements DurableObject {
         console.log(`[DO] Alarm: Cycle complete. Broadcasted snapshot.`);
 
       } catch (err: any) {
+        this.dispatchAlert(`API Sync Failure: ${err.message}`);
         console.error(`[DO] Alarm Error: ${err.message}`);
       }
     } catch (outerErr: any) {
@@ -544,8 +582,10 @@ export class ChainMonitor implements DurableObject {
   private getMembersWithPrediction(): { members: Record<string, any>; predictedCount: number } {
     const members: Record<string, any> = {};
     let predictedCount = 0;
+    const apiMemberIds = new Set(this.dbMembersCache.map(m => m.torn_id.toString()));
 
     for (const [id, data] of this.memberDataCache.entries()) {
+      const hasApi = apiMemberIds.has(id);
 
       const lastUpdated = data.last_updated || 0;
 
@@ -584,7 +624,8 @@ export class ChainMonitor implements DurableObject {
         energy: currentEnergy,
         energy_predicted: energyPredicted,
         cooldowns: currentCooldowns || { drug: 0, booster: 0, medical: 0 },
-        needs_refresh: cdNeedsRefresh
+        needs_refresh: cdNeedsRefresh,
+        has_api: hasApi
       };
     }
 

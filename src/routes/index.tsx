@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useTctSocket } from '../hooks/useTctSocket'
 import { useDashboardStore } from '../hooks/useDashboardStore'
 import { useAuthStore } from '../hooks/useAuthStore'
-import { MemberGrid } from '../components/MemberGrid'
+import { MemberListView } from '../components/MemberListView'
 import { LoginView } from '../components/LoginView'
 import { toast } from 'react-hot-toast'
 
@@ -36,7 +36,11 @@ function DashboardLayout() {
   const lastUpdatedAt = useDashboardStore(state => state.lastUpdatedAt);
   const members = useDashboardStore(state => state.members);
   const tacticalAggregate = useDashboardStore(state => state.tacticalAggregate);
+  const microLogs = useDashboardStore(state => state.microLogs);
   const serverClockOffset = useDashboardStore(state => state.serverClockOffset);
+  const { filters, toggleCalcSetting } = useDashboardStore();
+  const { sendCommand } = useTctSocket();
+  
 
   const [timer, setTimer] = useState('5:00');
   const [now, setNow] = useState(Date.now());
@@ -77,7 +81,7 @@ function DashboardLayout() {
       <div className="w-full max-w-[1600px] bg-zinc-950 rounded-2xl border border-white/5 flex flex-col overflow-hidden relative shadow-2xl min-h-[calc(100vh-2rem)]">
 
         {/* CSS-only decorative background */}
-        {/* Tactical Background Layer (Grid only) */}
+        {/* Tactical Background Layer */}
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
           <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
           <div className="absolute top-10 left-10 w-20 h-20 border-l border-t border-white/10 opacity-20" />
@@ -95,7 +99,7 @@ function DashboardLayout() {
               </div>
             </div>
 
-            <div className="flex-1 flex justify-center">
+            <div className="flex-1 flex justify-center items-center gap-4">
               <MasterSwitchControl masterSwitch={masterSwitch} />
             </div>
 
@@ -108,8 +112,51 @@ function DashboardLayout() {
           <div className="px-10 pt-8 grid grid-cols-3 gap-8 items-center">
             {/* Left Wing: Link & Speed */}
             <div className="flex flex-col gap-4">
-              <StatCard label="Tool Status" value={isConnected ? 'Active' : 'Broken'} sub={`Last Update: ${lastUpdatedAt > 0 ? `${Math.round((now + serverClockOffset - lastUpdatedAt) / 1000)}s` : 'WAIT'}`} color={isConnected ? 'text-emerald-400' : 'text-rose-500'} />
-              <StatCard label="Speed" value={hpm.toFixed(1)} sub={trend === 'UP' ? '↑ Increasing' : trend === 'DOWN' ? '↓ Decreasing' : '— Stable'} color="text-emerald-400" />
+              <StatCard 
+                label="Tool Status" 
+                value={
+                  <div className="flex items-center gap-6 w-full">
+                    <div className="flex flex-col">
+                      <span className="text-3xl font-black tracking-tighter">{isConnected ? 'Active' : 'Broken'}</span>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">
+                          {lastUpdatedAt > 0 ? `${Math.round((now + serverClockOffset - lastUpdatedAt) / 1000)}s ago` : 'WAIT'}
+                        </span>
+                        <button 
+                          onClick={() => {
+                            sendCommand('REQ_SYNC', {});
+                            toast.success('Sync Request Dispatched');
+                          }}
+                          className="p-1.5 rounded-lg bg-zinc-900 border border-white/5 text-zinc-500 hover:text-indigo-400 hover:border-indigo-500/30 transition-all active:scale-90"
+                          title="Force API Sync"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 border-l border-white/5 pl-4 flex flex-col gap-1.5 h-[50px] overflow-hidden">
+                      {microLogs && microLogs.slice(-3).reverse().map((log, i) => (
+                        <div key={i} className="flex items-center gap-2 opacity-80 animate-in fade-in slide-in-from-right-2 duration-300">
+                          <div className={`w-1 h-1 rounded-full flex-shrink-0 ${i === 0 ? 'bg-indigo-500 animate-pulse' : 'bg-zinc-700'}`} />
+                          <span className="text-[9px] text-zinc-500 font-mono truncate leading-none">
+                            <span className="text-zinc-700 mr-1.5">[{new Date((log as any).ts || Date.now()).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                            {typeof log === 'string' ? log : (log as any).msg}
+                          </span>
+                        </div>
+                      ))}
+                      {(!microLogs || microLogs.length === 0) && (
+                        <span className="text-[9px] text-zinc-700 font-mono italic">Awaiting tactical data...</span>
+                      )}
+                    </div>
+                  </div>
+                } 
+                sub="System Monitoring & Live Activity" 
+                color={isConnected ? 'text-emerald-400' : 'text-rose-500'} 
+              />
+              <StatCard label="Speed" value={<span className="text-3xl font-black tracking-tighter">{hpm.toFixed(1)}</span>} sub={trend === 'UP' ? '↑ Increasing' : trend === 'DOWN' ? '↓ Decreasing' : '— Stable'} color="text-emerald-400" />
             </div>
 
             {/* Center Core: Progress & Timeout */}
@@ -144,29 +191,75 @@ function DashboardLayout() {
               <StatCard 
                 label="Available Hits" 
                 value={
-                  Object.keys(members).length > 0 
-                    ? Math.floor(Object.values(members).reduce((acc, m) => acc + (m.last_updated ? (m.energy || 0) : 0), 0) / 25).toString()
-                    : 'NO DATA'
+                  <span className="text-3xl font-black tracking-tighter">
+                    {Object.keys(members).length > 0 
+                      ? Math.floor(Object.values(members)
+                          .filter(m => {
+                            if (filters.hideOffline && m.last_action?.status !== 'Online') return false;
+                            if (filters.hideHospital && m.status?.state === 'Hospital') return false;
+                            if (filters.hideTraveling && m.status?.state === 'Traveling') return false;
+                            return true;
+                          })
+                          .reduce((acc, m) => acc + (m.last_updated ? (m.energy || 0) : 0), 0) / 25).toString()
+                      : 'NO DATA'}
+                  </span>
                 } 
-                sub="Current Total Energy / 25" 
+                sub="Visible Total Energy / 25" 
                 color="text-indigo-400" 
               />
               <StatCard 
                 label="Strategic Reserves" 
                 value={
-                  <div className="flex items-center gap-2">
-                    <span>{tacticalAggregate ? `+${tacticalAggregate.totalMaxPotentialHits - tacticalAggregate.totalAvailableHits}` : 'NO DATA'}</span>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-3xl font-black tracking-tighter">
+                      {tacticalAggregate ? `+${tacticalAggregate.totalMaxPotentialHits - tacticalAggregate.totalAvailableHits}` : 'NO DATA'}
+                    </span>
+                    <div className="flex gap-1.5 p-1 bg-zinc-800/40 rounded-xl border border-white/10 self-start">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = !filters.excludeXanax;
+                          toggleCalcSetting('excludeXanax');
+                          sendCommand('UPDATE_CALC_SETTINGS', { settings: { excludeXanax: next } });
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[9px] font-black border transition-all ${!filters.excludeXanax ? 'bg-orange-500/20 border-orange-500/30 text-orange-400' : 'bg-zinc-900/50 border-transparent text-zinc-600'}`}
+                      >
+                        XAN
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = !filters.excludeFHC;
+                          toggleCalcSetting('excludeFHC');
+                          sendCommand('UPDATE_CALC_SETTINGS', { settings: { excludeFHC: next } });
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[9px] font-black border transition-all ${!filters.excludeFHC ? 'bg-rose-500/20 border-rose-500/30 text-rose-400' : 'bg-zinc-900/50 border-transparent text-zinc-600'}`}
+                      >
+                        FHC
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = !filters.excludeRefill;
+                          toggleCalcSetting('excludeRefill');
+                          sendCommand('UPDATE_CALC_SETTINGS', { settings: { excludeRefill: next } });
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[9px] font-black border transition-all ${!filters.excludeRefill ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400' : 'bg-zinc-900/50 border-transparent text-zinc-600'}`}
+                      >
+                        REF
+                      </button>
+                    </div>
                   </div>
                 } 
-                sub="Est. Xanax, FHC & Refills" 
+                sub="Strategic Potential Resources" 
                 color="text-cyan-400" 
               />
             </div>
           </div>
 
-          {/* Member List */}
+          {/* Member List Section */}
           <main className="flex-1 p-6">
-            <MemberGrid resetTimer={resetTimer} />
+            <MemberListView resetTimer={resetTimer} />
           </main>
 
           <footer className="px-6 py-4 text-center border-t border-white/5 bg-zinc-900/60 mt-auto">
@@ -222,12 +315,15 @@ function MasterSwitchControl({ masterSwitch }: { masterSwitch: string }) {
   );
 }
 
-function StatCard({ label, value, sub, color }: { label: string, value: React.ReactNode, sub: string, color: string }) {
+function StatCard({ label, value, sub, color, extra }: { label: string, value: React.ReactNode, sub: string, color: string, extra?: React.ReactNode }) {
   return (
-    <div className="bg-zinc-900/30 border border-white/5 rounded-2xl p-4 flex flex-col gap-0.5 text-left">
-      <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest leading-none mb-1">{label}</span>
-      <span className={`text-xl font-black font-mono tracking-tighter ${color} leading-tight`}>{value}</span>
-      <span className="text-[8px] text-zinc-600 font-bold uppercase truncate leading-none">{sub}</span>
+    <div className="bg-zinc-900/40 border border-white/10 rounded-2xl p-4 flex flex-col text-left min-h-[120px] relative overflow-hidden group transition-all hover:border-white/20">
+      <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest leading-none mb-3">{label}</span>
+      <div className={`font-mono tracking-tighter ${color} leading-none flex-1`}>
+        {value}
+      </div>
+      {extra && <div className="mt-2">{extra}</div>}
+      <span className="text-[8px] text-zinc-500 font-bold uppercase truncate leading-none mt-auto pt-3 border-t border-white/5">{sub}</span>
     </div>
   );
 }

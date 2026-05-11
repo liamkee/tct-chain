@@ -174,7 +174,8 @@ export class TacticalCalculator {
   /**
    * 爆發力推演 (Burst Potential) - 現有 + Refill + 1 Xanax + FHCs
    */
-  static predictBurstPotential(member: MemberTacticalData) {
+  static predictBurstPotential(member: MemberTacticalData, options: { excludeXanax?: boolean, excludeFHC?: boolean, excludeRefill?: boolean } = {}) {
+  
     const { energy_max, cooldowns, status } = member;
     if (['Hospital', 'Jail', 'Traveling'].includes(status.state)) {
       return { totalPotentialEnergy: 0, maxPotentialHits: 0 };
@@ -183,13 +184,13 @@ export class TacticalCalculator {
     let totalEnergy = member.energy || 0;
 
     // 1. Refill
-    if (!member.refill_used) {
+    if (!member.refill_used && !options.excludeRefill) {
       totalEnergy += getItemEnergy(TORN_ITEMS.REFILL, energy_max);
     }
 
     // 2. Xanax (如果沒 CD)
     let xanaxCount = 0;
-    if (cooldowns && (cooldowns.drug || 0) === 0) {
+    if (cooldowns && (cooldowns.drug || 0) === 0 && !options.excludeXanax) {
       totalEnergy += getItemEnergy(TORN_ITEMS.XANAX);
       xanaxCount++;
     }
@@ -197,7 +198,7 @@ export class TacticalCalculator {
     // 3. FHC (Booster cooldown limit is 24h = 86400s)
     let fhcCount = 0;
     const currentBoosterCd = cooldowns?.booster || 0;
-    if (currentBoosterCd < TORN_RULES.BOOSTER_CD_THRESHOLD) {
+    if (currentBoosterCd < TORN_RULES.BOOSTER_CD_THRESHOLD && !options.excludeFHC) {
       // Calculate how many FHCs (6h = 21600s) can be taken
       fhcCount = Math.ceil((TORN_RULES.BOOSTER_CD_THRESHOLD - currentBoosterCd) / 21600);
       totalEnergy += fhcCount * (energy_max || 100);
@@ -218,7 +219,7 @@ export class TacticalCalculator {
    * 動態時間軸戰力預測 (Time-Aware Potential Prediction)
    * 修正：不再計算 FHC，只計算自然回能 + 1次 Xanax (如果CD到)
    */
-  static predictPotentialOverTime(member: MemberTacticalData, targetMinutes: number) {
+  static predictPotentialOverTime(member: MemberTacticalData, targetMinutes: number, options: { excludeXanax?: boolean } = {}) {
     const { cooldowns, status, energy_max } = member;
     
     // 1. 基礎可用能量 (當前，不含 Refill)
@@ -237,7 +238,7 @@ export class TacticalCalculator {
 
     // 3. 資源釋放推演 (只計算 Xanax)
     const drugCdMinutes = (cooldowns?.drug || 0) / 60;
-    if (drugCdMinutes <= targetMinutes) {
+    if (drugCdMinutes <= targetMinutes && !options.excludeXanax) {
       totalEnergy += getItemEnergy(TORN_ITEMS.XANAX);
     }
 
@@ -248,7 +249,14 @@ export class TacticalCalculator {
     };
   }
 
-  static aggregate(members: Record<string, any>, selectedIds?: string[]) {
+  static aggregate(members: Record<string, any>, selectedIds?: string[], options: { 
+    excludeXanax?: boolean, 
+    excludeFHC?: boolean, 
+    excludeRefill?: boolean,
+    hideOffline?: boolean,
+    hideHospital?: boolean,
+    hideTraveling?: boolean
+  } = {}) {
     let totalAvailableHits = 0;
     let totalBurstHits = 0;
     let totalProjectedHits1h = 0;
@@ -264,10 +272,15 @@ export class TacticalCalculator {
       // Skip members who have never been polled successfully
       if (!memberData.last_updated) return;
       
+      // Apply visibility filters to the calculation
+      if (options.hideOffline && memberData.last_action?.status !== 'Online') return;
+      if (options.hideHospital && memberData.status?.state === 'Hospital') return;
+      if (options.hideTraveling && memberData.status?.state === 'Traveling') return;
+
       validMemberCount++;
       const current = TacticalCalculator.calculatePotential(memberData);
-      const burst = TacticalCalculator.predictBurstPotential(memberData);
-      const projected1h = TacticalCalculator.predictPotentialOverTime(memberData, 60);
+      const burst = TacticalCalculator.predictBurstPotential(memberData, options);
+      const projected1h = TacticalCalculator.predictPotentialOverTime(memberData, 60, options);
       
       totalBurstHits += burst.maxPotentialHits;
       totalProjectedHits1h += projected1h.potentialHits;
@@ -278,7 +291,7 @@ export class TacticalCalculator {
 
     return {
       totalAvailableHits,
-      totalMaxPotentialHits: totalBurstHits, // 保持 Key 名不變，以免前端崩潰
+      totalMaxPotentialHits: totalBurstHits,
       totalProjectedHits1h,
       memberCount: validMemberCount
     };

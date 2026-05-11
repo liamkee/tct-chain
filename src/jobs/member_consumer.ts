@@ -100,8 +100,10 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
         updatesBatch.push({
            id: tornId.toString(),
            updates: {
+            id: tornId.toString(),
+            name: data.name,
             energy: data.energy?.current,
-            energy_max: isDonator ? 150 : 100,
+            energy_max: data.energy?.maximum || (isDonator ? 150 : 100),
 
             cooldowns: data.cooldowns,
             refill_used: data.refills ? data.refills.energy === false : false,
@@ -109,6 +111,7 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
           }
         });
 
+        logBatch.push(`Sync [${tornId}] ${data.name}: E:${data.energy?.current} CD:${data.cooldowns?.drug || 0}`);
         message.ack();
 
       } catch (err: any) {

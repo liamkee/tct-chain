@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run db:migrate:local && wrangler dev",
+    "dev": "npm run build && npm run db:migrate:local && wrangler dev",
     "dev:all": "npm run db:migrate:local && (npm run dev:vite & wrangler dev)",
     "dev:vite": "vite",
     "build": "vite build",
