@@ -95,7 +95,7 @@ api.get('/health', checkMasterSwitch, async (c) => {
 
     // 3. Test Queue binding
     const queueExists = !!c.env.MEMBER_QUEUE;
-    if (queueExists) {
+    if (queueExists && c.req.query('testQueue') === 'true') {
       await c.env.MEMBER_QUEUE.send({ test: 'Ping from health check!', time: Date.now() });
     }
 

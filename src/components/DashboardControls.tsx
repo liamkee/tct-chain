@@ -3,7 +3,7 @@ import { useDashboardStore } from '../hooks/useDashboardStore'
 import { toast } from 'react-hot-toast'
 
 export const DashboardControls: React.FC = () => {
-  const { filters, toggleFilter, chain, setTarget, viewMode, setViewMode, masterSwitch } = useDashboardStore();
+  const { filters, toggleFilter, chain, setTarget, masterSwitch } = useDashboardStore();
 
   const handleToggle = async () => {
     const action = masterSwitch === 'ON' ? 'stop' : 'start';

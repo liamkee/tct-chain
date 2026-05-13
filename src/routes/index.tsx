@@ -195,7 +195,7 @@ function DashboardLayout() {
                     {Object.keys(members).length > 0 
                       ? Math.floor(Object.values(members)
                           .filter(m => {
-                            if (filters.hideOffline && m.last_action?.status !== 'Online') return false;
+                            if (filters.hideOffline && m.last_action?.status === 'Offline') return false;
                             if (filters.hideHospital && m.status?.state === 'Hospital') return false;
                             if (filters.hideTraveling && m.status?.state === 'Traveling') return false;
                             return true;

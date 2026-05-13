@@ -91,7 +91,26 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
         const data = await res.json() as any;
         
         if (data.error) {
-          throw new Error(`Torn Error: ${data.error.error}`);
+          const errorCode = data.error.code;
+          // Permanent API Key Errors in Torn:
+          // 1: Key is empty, 2: Incorrect key, 3: Wrong type, 10: Fed jail, 13: Inactive, 16: Access level, 18: Account suspended
+          const isPermanentKeyError = [1, 2, 3, 10, 13, 16, 18].includes(errorCode);
+
+          if (isPermanentKeyError) {
+             console.warn(`[Queue] Permanent API Key Error (Code ${errorCode}) for member ${tornId}: ${data.error.error}`);
+             updatesBatch.push({
+                id: tornId.toString(),
+                updates: {
+                   api_key_invalid: true,
+                   last_failed_key: apiKey
+                }
+             });
+             logBatch.push(`[ERROR] Member [${tornId}] API key invalid (Code ${errorCode}): ${data.error.error}`);
+             message.ack(); // Acknowledge to prevent endless queue retries!
+             return;
+          } else {
+             throw new Error(`Torn Error (Code ${errorCode}): ${data.error.error}`);
+          }
         }
 
         const energyMax = data.energy?.maximum || 100;
@@ -107,7 +126,8 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
 
             cooldowns: data.cooldowns,
             refill_used: data.refills ? data.refills.energy === false : false,
-            last_updated: Math.floor(Date.now() / 1000)
+            last_updated: Math.floor(Date.now() / 1000),
+            api_key_invalid: false // Reset flag on successful sync
           }
         });
 

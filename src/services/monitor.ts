@@ -249,9 +249,10 @@ export class ChainMonitor implements DurableObject {
           this.memberDataCache.set(stringId, newData);
 
           // 2. 只有关键变化才立即存盘，否则只更新内存
-          // 关键变化：状态改变、能量大幅波动(>20)、或者距离上次存盘超过 5 分钟
+          // 关键变化：状态改变、能量大幅波动(>20)、API key 有效状态改变、或者距离上次存盘超过 5 分钟
           const isCritical = !oldData ||
             oldData.status?.state !== newData.status?.state ||
+            oldData.api_key_invalid !== newData.api_key_invalid ||
             Math.abs((oldData.energy || 0) - (newData.energy || 0)) > 20 ||
             Date.now() - this.lastPersistenceTs > 300000;
 
@@ -516,10 +517,18 @@ export class ChainMonitor implements DurableObject {
           const m = membersData[id];
           const existing = this.memberDataCache.get(id);
 
+          // 🚀 熔斷器：如果此 Key 已知失效，且數據庫中尚未更新 Key，則跳過排隊以免刷爆 Quota
+          if (existing && existing.api_key_invalid && existing.last_failed_key === apiKey) {
+            return;
+          }
+
           const isInitial = !existing || !existing.last_updated;
-          const statusChanged = !existing || JSON.stringify(existing.status) !== JSON.stringify(m.status);
+          // 🚀 核心修復：只比較狀態(state)和到期時間(until)，忽略會每分鐘變更的 description 文字
+          const statusChanged = !existing ||
+            existing.status?.state !== m.status?.state ||
+            existing.status?.until !== m.status?.until;
           const actionChanged = !existing || existing.last_action?.status !== m.last_action?.status;
-          const isStale = existing && (Math.floor(Date.now() / 1000) - (existing.last_updated || 0)) > 300; // 5 mins
+          const isStale = existing && (Math.floor(Date.now() / 1000) - (existing.last_updated || 0)) > 900; // 15 mins (預測引擎可完美預測，拉長至15分鐘)
 
           if (isInitial || statusChanged || actionChanged || isStale) {
             // Limit pending polls to avoid spamming the queue if it's slow

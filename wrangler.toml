@@ -29,7 +29,7 @@ binding = "MEMBER_QUEUE"
 
 [[queues.consumers]]
 queue = "tct-member-queue"
-max_batch_size = 10
+max_batch_size = 100
 max_batch_timeout = 5
 
 [[durable_objects.bindings]]

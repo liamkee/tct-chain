@@ -177,9 +177,7 @@ export class TacticalCalculator {
   static predictBurstPotential(member: MemberTacticalData, options: { excludeXanax?: boolean, excludeFHC?: boolean, excludeRefill?: boolean } = {}) {
   
     const { energy_max, cooldowns, status } = member;
-    if (['Hospital', 'Jail', 'Traveling'].includes(status.state)) {
-      return { totalPotentialEnergy: 0, maxPotentialHits: 0 };
-    }
+
 
     let totalEnergy = member.energy || 0;
 
@@ -273,7 +271,7 @@ export class TacticalCalculator {
       if (!memberData.last_updated) return;
       
       // Apply visibility filters to the calculation
-      if (options.hideOffline && memberData.last_action?.status !== 'Online') return;
+      if (options.hideOffline && memberData.last_action?.status === 'Offline') return;
       if (options.hideHospital && memberData.status?.state === 'Hospital') return;
       if (options.hideTraveling && memberData.status?.state === 'Traveling') return;
 
