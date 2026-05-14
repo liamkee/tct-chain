@@ -47,7 +47,7 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
           return 3;
         };
         const statusDiff = getStatusWeight(a) - getStatusWeight(b);
-        const diff = statusDiff !== 0 ? statusDiff : (a.last_action?.seconds || 0) - (b.last_action?.seconds || 0);
+        const diff = statusDiff !== 0 ? statusDiff : (b.last_action?.timestamp || 0) - (a.last_action?.timestamp || 0);
         return isAsc ? -diff : diff;
       }
 
@@ -57,10 +57,17 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
       }
 
       if (filters.sortBy === 'refill') {
-        const aVal = a.refill_used ? 1 : 0;
-        const bVal = b.refill_used ? 1 : 0;
-        const diff = aVal - bVal;
-        return isAsc ? -diff : diff;
+        const getRefillWeight = (m: any) => {
+          if (!m.last_updated) return 2; // 沒有數據的人
+          if (m.refill_used) return 1;   // 已使用的人
+          return 0;                      // 還有可以使用的人
+        };
+        const weightDiff = getRefillWeight(a) - getRefillWeight(b);
+        if (weightDiff !== 0) {
+          return isAsc ? -weightDiff : weightDiff;
+        }
+        const energyDiff = (b.energy || 0) - (a.energy || 0);
+        return isAsc ? -energyDiff : energyDiff;
       }
 
       if (a.last_action?.status === 'Online' && b.last_action?.status !== 'Online') return -1;

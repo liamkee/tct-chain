@@ -486,61 +486,57 @@ export class ChainMonitor implements DurableObject {
           }
         }
 
-        // 5. Process Members basic status
-        for (const [id, m] of Object.entries(membersData) as [string, any][]) {
-          const existing = this.memberDataCache.get(id) || {};
-          const currentStatusStr = `${m.status?.state}_${m.last_action?.status}`;
+        // 5. Process Members basic status & 6. Queue Individual Polls (Action-Driven)
+        const activeMemberKeys = new Map((dbMembers || []).map((m: any) => [m.torn_id.toString(), m.api_key]));
+        const batch: any[] = [];
 
-          if (currentStatusStr !== this.memberStatusCache.get(id) || !existing.name) {
-            const merged = {
-              ...existing,
-              id,
-              name: m.name || existing.name || 'Unknown',
-              status: m.status,
-              last_action: m.last_action
-            };
-            this.memberDataCache.set(id, merged);
+        for (const [id, m] of Object.entries(membersData) as [string, any][]) {
+          const existing = this.memberDataCache.get(id);
+          const apiKey = activeMemberKeys.get(id);
+
+          if (apiKey && (!existing || !(existing.api_key_invalid && existing.last_failed_key === apiKey))) {
+            const isInitial = !existing || !existing.last_updated;
+            const statusChanged = !existing ||
+              existing.status?.state !== m.status?.state ||
+              existing.status?.until !== m.status?.until;
+            const actionChanged = !existing || 
+              existing.last_action?.status !== m.last_action?.status ||
+              existing.last_action?.timestamp !== m.last_action?.timestamp;
+            const isStale = existing && (Math.floor(Date.now() / 1000) - (existing.last_updated || 0)) > 900;
+
+            if (isInitial || statusChanged || actionChanged || isStale) {
+              const lastPoll = this.pendingPolls.get(id) || 0;
+              if (Date.now() - lastPoll >= 60000) {
+                batch.push({
+                  body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now() }
+                });
+                this.pendingPolls.set(id, Date.now());
+              }
+            }
+          }
+
+          const currentStatusStr = `${m.status?.state}_${m.last_action?.status}`;
+          const needsPersist = !existing || !existing.name ||
+            existing.status?.state !== m.status?.state ||
+            existing.status?.until !== m.status?.until ||
+            existing.last_action?.status !== m.last_action?.status ||
+            existing.last_action?.timestamp !== m.last_action?.timestamp;
+
+          const merged = {
+            ...(existing || {}),
+            id,
+            name: m.name || existing?.name || 'Unknown',
+            status: m.status,
+            last_action: m.last_action
+          };
+          this.memberDataCache.set(id, merged);
+
+          if (needsPersist) {
             storageUpdates[`member_${id}`] = merged;
             this.memberStatusCache.set(id, currentStatusStr);
             hasChanges = true;
           }
         }
-
-        // 6. Queue Individual Polls (Action-Driven)
-        const activeMemberKeys = new Map((dbMembers || []).map((m: any) => [m.torn_id.toString(), m.api_key]));
-        const batch: any[] = [];
-
-        Object.keys(membersData).forEach(id => {
-          const apiKey = activeMemberKeys.get(id);
-          if (!apiKey) return;
-
-          const m = membersData[id];
-          const existing = this.memberDataCache.get(id);
-
-          // 🚀 熔斷器：如果此 Key 已知失效，且數據庫中尚未更新 Key，則跳過排隊以免刷爆 Quota
-          if (existing && existing.api_key_invalid && existing.last_failed_key === apiKey) {
-            return;
-          }
-
-          const isInitial = !existing || !existing.last_updated;
-          // 🚀 核心修復：只比較狀態(state)和到期時間(until)，忽略會每分鐘變更的 description 文字
-          const statusChanged = !existing ||
-            existing.status?.state !== m.status?.state ||
-            existing.status?.until !== m.status?.until;
-          const actionChanged = !existing || existing.last_action?.status !== m.last_action?.status;
-          const isStale = existing && (Math.floor(Date.now() / 1000) - (existing.last_updated || 0)) > 900; // 15 mins (預測引擎可完美預測，拉長至15分鐘)
-
-          if (isInitial || statusChanged || actionChanged || isStale) {
-            // Limit pending polls to avoid spamming the queue if it's slow
-            const lastPoll = this.pendingPolls.get(id) || 0;
-            if (Date.now() - lastPoll < 60000) return; // Max 1 poll per minute per member
-
-            batch.push({
-              body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now() }
-            });
-            this.pendingPolls.set(id, Date.now());
-          }
-        });
 
         if (batch.length > 0) {
           await this.env.MEMBER_QUEUE.sendBatch(batch);
