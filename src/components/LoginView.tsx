@@ -104,6 +104,15 @@ export function LoginView() {
                     className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder:text-zinc-700"
                   />
                 </div>
+
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium space-y-1">
+                  <div className="flex items-center gap-2 font-black text-amber-300">
+                    <span>⚠️</span> REQUIRED: LIMITED ACCESS KEY
+                  </div>
+                  <p className="text-zinc-400 text-[11px] leading-relaxed font-sans">
+                    Tactical Link Protocol requires a <span className="text-white font-bold">Limited Access</span> key to monitor Energy Bars, Refills, and Cooldowns. Public or Minimal keys will be rejected.
+                  </p>
+                </div>
                 
                 {error && (
                   <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-bold text-center animate-in zoom-in duration-300">

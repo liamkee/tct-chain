@@ -12,11 +12,17 @@ const auth = new Hono<Env>()
 
 // Helper: Verify Torn API Key
 async function verifyTornKey(apiKey: string) {
-  const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`)
+  const res = await fetch(`https://api.torn.com/user/?selections=profile,bars,cooldowns,refills&key=${apiKey}`)
   if (!res.ok) return { error: 'Torn API temporarily unavailable', status: 502 }
   
   const data = await res.json() as any
-  if (data.error || !data.player_id) return { error: 'Invalid API Key', status: 400 }
+  if (data.error) {
+    if (data.error.code === 16) {
+      return { error: 'Limited Access API Key required. Your key access level is too low.', status: 403 }
+    }
+    return { error: data.error.error || 'Invalid API Key', status: 400 }
+  }
+  if (!data.player_id) return { error: 'Invalid API Key', status: 400 }
   
   return { success: true, data }
 }
