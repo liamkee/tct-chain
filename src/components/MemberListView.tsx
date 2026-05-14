@@ -124,19 +124,19 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
         <div className="flex items-center px-4 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500 border-b border-white/5 mb-2 bg-zinc-900/40 rounded-t-xl">
           <button
             onClick={() => setSort('name')}
-            className={`w-[200px] flex-shrink-0 text-left hover:text-zinc-300 transition-colors flex items-center gap-1 ${filters.sortBy === 'name' ? 'text-indigo-400' : ''}`}
+            className={`w-[200px] shrink-0 text-left hover:text-zinc-300 transition-colors flex items-center gap-1 ${filters.sortBy === 'name' ? 'text-indigo-400' : ''}`}
           >
             Personnel {getSortIcon('name')}
           </button>
           <button
             onClick={() => setSort('status')}
-            className={`w-[100px] flex-shrink-0 text-center hover:text-zinc-300 transition-colors flex items-center justify-center gap-1 ${filters.sortBy === 'status' ? 'text-indigo-400' : ''}`}
+            className={`w-[100px] shrink-0 text-center hover:text-zinc-300 transition-colors flex items-center justify-center gap-1 ${filters.sortBy === 'status' ? 'text-indigo-400' : ''}`}
           >
             Status {getSortIcon('status')}
           </button>
           <button
             onClick={() => setSort('activity')}
-            className={`w-[100px] flex-shrink-0 text-center hover:text-zinc-300 transition-colors flex items-center justify-center gap-1 ${filters.sortBy === 'activity' ? 'text-indigo-400' : ''}`}
+            className={`w-[100px] shrink-0 text-center hover:text-zinc-300 transition-colors flex items-center justify-center gap-1 ${filters.sortBy === 'activity' ? 'text-indigo-400' : ''}`}
           >
             Activity {getSortIcon('activity')}
           </button>
@@ -146,14 +146,14 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
           >
             Energy {getSortIcon('power')}
           </button>
-          <div className="w-[260px] flex-shrink-0 text-center opacity-50 cursor-default">Cooldowns</div>
+          <div className="w-[260px] shrink-0 text-center opacity-50 cursor-default">Cooldowns</div>
           <button
             onClick={() => setSort('refill')}
-            className={`w-[80px] flex-shrink-0 text-right hover:text-zinc-300 transition-colors flex items-center justify-end gap-1 ${filters.sortBy === 'refill' ? 'text-indigo-400' : ''}`}
+            className={`w-[80px] shrink-0 text-right hover:text-zinc-300 transition-colors flex items-center justify-end gap-1 ${filters.sortBy === 'refill' ? 'text-indigo-400' : ''}`}
           >
             Refill {getSortIcon('refill')}
           </button>
-          <div className="w-[60px] flex-shrink-0 text-right opacity-50 cursor-default" />
+          <div className="w-[60px] shrink-0 text-right opacity-50 cursor-default" />
         </div>
 
         {processedMembers.map((member) => (
@@ -205,7 +205,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
   return (
     <div className={`flex items-center px-4 py-2.5 rounded-xl border border-white/5 bg-zinc-900/20 hover:bg-zinc-800/40 transition-all group ${isSelected ? 'ring-1 ring-indigo-500/50 bg-indigo-500/5' : ''}`}>
       {/* Personnel */}
-      <div className="w-[200px] flex-shrink-0 flex items-center gap-3 overflow-hidden">
+      <div className="w-[200px] shrink-0 flex items-center gap-3 overflow-hidden">
         <div className="flex flex-col min-w-0">
           <span className="font-bold text-zinc-100 truncate text-sm tracking-tight">{member.name}</span>
           <span className="text-[9px] text-zinc-600 font-mono tabular-nums">#{member.id}</span>
@@ -213,7 +213,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Life Status */}
-      <div className="w-[100px] flex-shrink-0 flex flex-col items-center justify-center gap-1">
+      <div className="w-[100px] shrink-0 flex flex-col items-center justify-center gap-1">
         <div className={`h-1 w-1 rounded-full ${member.status?.state === 'Okay' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' :
           member.status?.state === 'Hospital' ? 'bg-rose-500' :
             member.status?.state === 'Traveling' ? 'bg-blue-500' : 'bg-amber-500'
@@ -222,7 +222,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Activity */}
-      <div className="w-[100px] flex-shrink-0 flex items-center justify-center">
+      <div className="w-[100px] shrink-0 flex items-center justify-center">
         <span className={`text-[10px] font-black uppercase tracking-widest ${onlineColor}`}>{member.last_action?.status}</span>
       </div>
 
@@ -242,7 +242,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Cooldowns */}
-      <div className="w-[260px] flex-shrink-0 flex items-center justify-center gap-2">
+      <div className="w-[260px] shrink-0 flex items-center justify-center gap-2">
         {(member.cooldowns?.drug || 0) > 0 && (
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-orange-500/5 border border-orange-500/20 shadow-inner" title="Drug CD">
             <span className="text-[9px] font-black text-orange-500/80">D</span>
@@ -284,7 +284,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Refill Column */}
-      <div className="w-[80px] flex-shrink-0 flex justify-end items-center px-2">
+      <div className="w-[80px] shrink-0 flex justify-end items-center px-2">
         {(member.is_pending || (!member.last_updated && !member.has_api)) ? (
           <span className="text-[10px] text-rose-500/50 font-black uppercase tracking-widest animate-pulse">No Data</span>
         ) : !member.last_updated ? (
@@ -307,7 +307,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Empty space for alignment */}
-      <div className="w-[60px] flex-shrink-0" />
+      <div className="w-[60px] shrink-0" />
     </div>
   );
 };

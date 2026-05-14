@@ -612,8 +612,8 @@ export class ChainMonitor implements DurableObject {
           data.energy, data.energy_max || 100, lastUpdated, (data.energy_max || 100) > 100
         );
         currentEnergy = energyPred.energy;
-        energyPredicted = true;
-        predictedCount++;
+        energyPredicted = energyPred.isPredicted;
+        if (energyPred.isPredicted) predictedCount++;
       }
 
       // --- Cooldown prediction: ALL members ---

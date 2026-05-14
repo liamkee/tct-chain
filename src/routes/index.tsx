@@ -140,7 +140,7 @@ function DashboardLayout() {
                     <div className="flex-1 border-l border-white/5 pl-4 flex flex-col gap-1.5 h-[50px] overflow-hidden">
                       {microLogs && microLogs.slice(-3).reverse().map((log, i) => (
                         <div key={i} className="flex items-center gap-2 opacity-80 animate-in fade-in slide-in-from-right-2 duration-300">
-                          <div className={`w-1 h-1 rounded-full flex-shrink-0 ${i === 0 ? 'bg-indigo-500 animate-pulse' : 'bg-zinc-700'}`} />
+                          <div className={`w-1 h-1 rounded-full shrink-0 ${i === 0 ? 'bg-indigo-500 animate-pulse' : 'bg-zinc-700'}`} />
                           <span className="text-[9px] text-zinc-500 font-mono truncate leading-none">
                             <span className="text-zinc-700 mr-1.5">[{new Date((log as any).ts || Date.now()).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
                             {typeof log === 'string' ? log : (log as any).msg}
@@ -233,7 +233,7 @@ function DashboardLayout() {
                           toggleCalcSetting('excludeFHC');
                           sendCommand('UPDATE_CALC_SETTINGS', { settings: { excludeFHC: next } });
                         }}
-                        className={`px-2 py-0.5 rounded-lg text-[9px] font-black border transition-all ${!filters.excludeFHC ? 'bg-rose-500/20 border-rose-500/30 text-rose-400' : 'bg-zinc-900/50 border-transparent text-zinc-600'}`}
+                        className={`px-2 py-0.5 rounded-lg text-[9px] font-black border transition-all ${!filters.excludeFHC ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-zinc-900/50 border-transparent text-zinc-600'}`}
                       >
                         FHC
                       </button>

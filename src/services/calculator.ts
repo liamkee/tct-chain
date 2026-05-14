@@ -87,12 +87,15 @@ export class TacticalCalculator {
     const nowTickIndex = Math.floor(nowSec / intervalSec);
     const ticksElapsed = Math.max(0, nowTickIndex - lastTickIndex);
 
-    const regenEnergy = ticksElapsed * TORN_RULES.REGEN_AMOUNT;
+    // 修正：當現有能量已達到或超出上限時，不再進行回能計算，保持原有溢出能量
+    const newEnergy = lastEnergy >= energyMax 
+      ? lastEnergy 
+      : Math.min(lastEnergy + ticksElapsed * TORN_RULES.REGEN_AMOUNT, energyMax);
 
     return {
-      energy: Math.min(lastEnergy + regenEnergy, energyMax),
+      energy: newEnergy,
       ticksElapsed,
-      isPredicted: ticksElapsed > 0,
+      isPredicted: ticksElapsed > 0 && lastEnergy < energyMax,
     };
   }
 
