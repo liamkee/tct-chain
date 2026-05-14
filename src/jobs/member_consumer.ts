@@ -73,7 +73,14 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
 
       if (message.attempts > 3) {
          console.log(`[Queue] ⚠️ Poison message for ${tornId}. Max retries exceeded.`);
-         logBatch.push(`[ALERT] Member ${tornId} failed multiple times. Check API key.`);
+         updatesBatch.push({
+            id: tornId.toString(),
+            updates: {
+               api_key_invalid: true,
+               last_failed_key: apiKey
+            }
+         });
+         logBatch.push(`[ALERT] Member ${tornId} API failed multiple times. Polling suspended.`);
          message.ack(); // Avoid endless loop
          return;
       }

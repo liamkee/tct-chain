@@ -222,8 +222,13 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Activity */}
-      <div className="w-[100px] shrink-0 flex items-center justify-center">
+      <div className="w-[100px] shrink-0 flex flex-col items-center justify-center gap-0.5">
         <span className={`text-[10px] font-black uppercase tracking-widest ${onlineColor}`}>{member.last_action?.status}</span>
+        {member.last_action?.status === 'Offline' && member.last_action?.relative && (
+          <span className="text-[8px] text-zinc-600 font-bold truncate max-w-full tracking-tighter capitalize" title={member.last_action.timestamp ? new Date(member.last_action.timestamp * 1000).toLocaleString() : ''}>
+            {member.last_action.relative}
+          </span>
+        )}
       </div>
 
       {/* Energy */}
@@ -243,43 +248,54 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
 
       {/* Cooldowns */}
       <div className="w-[260px] shrink-0 flex items-center justify-center gap-2">
-        {(member.cooldowns?.drug || 0) > 0 && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-orange-500/5 border border-orange-500/20 shadow-inner" title="Drug CD">
-            <span className="text-[9px] font-black text-orange-500/80">D</span>
-            <span className="text-[10px] font-mono font-bold text-orange-400 tabular-nums">
-              {member.cooldowns.drug >= 3600 ? `${Math.floor(member.cooldowns.drug / 3600)}h ` : ''}
-              {Math.floor((member.cooldowns.drug % 3600) / 60)}m
-            </span>
+        {member.api_key_invalid ? (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 animate-pulse" title="API Key Error / Repeated Failures">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-[10px] font-black uppercase tracking-wider">API Error - Notify Member</span>
           </div>
-        )}
-        {(member.cooldowns?.medical || 0) > 0 && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rose-500/5 border border-rose-500/20 shadow-inner" title="Med CD">
-            <span className="text-[9px] font-black text-rose-500/80">M</span>
-            <span className="text-[10px] font-mono font-bold text-rose-400 tabular-nums">
-              {member.cooldowns.medical >= 3600 ? `${Math.floor(member.cooldowns.medical / 3600)}h ` : ''}
-              {Math.floor((member.cooldowns.medical % 3600) / 60)}m
-            </span>
-          </div>
-        )}
-        {(member.cooldowns?.booster || 0) > 0 && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-500/5 border border-indigo-500/20 shadow-inner" title="Boost CD">
-            <span className="text-[9px] font-black text-indigo-500/80">B</span>
-            <span className="text-[10px] font-mono font-bold text-indigo-400 tabular-nums">
-              {member.cooldowns.booster >= 3600 ? `${Math.floor(member.cooldowns.booster / 3600)}h ` : ''}
-              {Math.floor((member.cooldowns.booster % 3600) / 60)}m
-            </span>
-          </div>
-        )}
-        {(member.is_pending || (!member.last_updated && !member.has_api)) && (
-          <span className="text-[10px] text-rose-500/50 font-black uppercase tracking-widest animate-pulse">No Data</span>
-        )}
-        {member.has_api && !member.last_updated && (
-          <span className="text-[10px] text-zinc-800 font-black uppercase tracking-tighter opacity-30 italic">Syncing...</span>
-        )}
-        {member.last_updated && !(member.cooldowns?.drug > 0 || member.cooldowns?.medical > 0 || member.cooldowns?.booster > 0) && (
-          <div className="h-6 flex items-center">
-            <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] opacity-40">Ready</span>
-          </div>
+        ) : (
+          <>
+            {(member.cooldowns?.drug || 0) > 0 && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-orange-500/5 border border-orange-500/20 shadow-inner" title="Drug CD">
+                <span className="text-[9px] font-black text-orange-500/80">D</span>
+                <span className="text-[10px] font-mono font-bold text-orange-400 tabular-nums">
+                  {member.cooldowns.drug >= 3600 ? `${Math.floor(member.cooldowns.drug / 3600)}h ` : ''}
+                  {Math.floor((member.cooldowns.drug % 3600) / 60)}m
+                </span>
+              </div>
+            )}
+            {(member.cooldowns?.medical || 0) > 0 && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rose-500/5 border border-rose-500/20 shadow-inner" title="Med CD">
+                <span className="text-[9px] font-black text-rose-500/80">M</span>
+                <span className="text-[10px] font-mono font-bold text-rose-400 tabular-nums">
+                  {member.cooldowns.medical >= 3600 ? `${Math.floor(member.cooldowns.medical / 3600)}h ` : ''}
+                  {Math.floor((member.cooldowns.medical % 3600) / 60)}m
+                </span>
+              </div>
+            )}
+            {(member.cooldowns?.booster || 0) > 0 && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-500/5 border border-indigo-500/20 shadow-inner" title="Boost CD">
+                <span className="text-[9px] font-black text-indigo-500/80">B</span>
+                <span className="text-[10px] font-mono font-bold text-indigo-400 tabular-nums">
+                  {member.cooldowns.booster >= 3600 ? `${Math.floor(member.cooldowns.booster / 3600)}h ` : ''}
+                  {Math.floor((member.cooldowns.booster % 3600) / 60)}m
+                </span>
+              </div>
+            )}
+            {(member.is_pending || (!member.last_updated && !member.has_api)) && (
+              <span className="text-[10px] text-rose-500/50 font-black uppercase tracking-widest animate-pulse">No Data</span>
+            )}
+            {member.has_api && !member.last_updated && (
+              <span className="text-[10px] text-zinc-800 font-black uppercase tracking-tighter opacity-30 italic">Syncing...</span>
+            )}
+            {member.last_updated && !(member.cooldowns?.drug > 0 || member.cooldowns?.medical > 0 || member.cooldowns?.booster > 0) && (
+              <div className="h-6 flex items-center">
+                <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] opacity-40">Ready</span>
+              </div>
+            )}
+          </>
         )}
       </div>
 
