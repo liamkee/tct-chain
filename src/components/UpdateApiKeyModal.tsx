@@ -43,7 +43,7 @@ export function UpdateApiKeyModal() {
         onClick={() => setIsOpen(true)}
         className="px-5 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-all active:scale-95"
       >
-        API Key
+        API Key Update
       </button>
 
       {isOpen && createPortal(

@@ -76,39 +76,42 @@ export function WarRoom() {
       
       <div className="relative z-10 flex flex-col gap-4 w-full">
         {/* Faction Headers & Center Target */}
-        <div className="flex justify-between items-end px-4">
-          {/* Our Side */}
-          <div className="flex flex-col gap-1 text-left">
-            <span className="text-sm font-black text-emerald-400 flex items-center gap-2 tracking-widest uppercase">
-              <div className="w-2 h-2 bg-emerald-400 rounded-sm shadow-[0_0_10px_currentColor]" />
-              {warData.ourName || 'Our Faction'}
-            </span>
-            <span className="text-5xl font-mono font-black text-white tracking-tighter drop-shadow-xl">
-              {warData.ourScore.toLocaleString()}
-            </span>
+        <div className="flex flex-col md:flex-row justify-between items-center md:items-end px-2 md:px-4 gap-6 md:gap-0">
+          
+          <div className="flex justify-between items-end w-full md:w-auto md:contents">
+            {/* Our Side */}
+            <div className="flex flex-col gap-1 text-left">
+              <span className="text-xs md:text-sm font-black text-emerald-400 flex items-center gap-2 tracking-widest uppercase truncate max-w-[130px] md:max-w-none">
+                <div className="w-1.5 h-1.5 md:w-2 md:h-2 shrink-0 bg-emerald-400 rounded-sm shadow-[0_0_10px_currentColor]" />
+                <span className="truncate">{warData.ourName || 'Our Faction'}</span>
+              </span>
+              <span className="text-4xl md:text-5xl font-mono font-black text-white tracking-tighter drop-shadow-xl">
+                {warData.ourScore.toLocaleString()}
+              </span>
+            </div>
+
+            {/* Their Side */}
+            <div className="flex flex-col gap-1 text-right md:order-3">
+              <span className="text-xs md:text-sm font-black text-rose-400 flex items-center justify-end gap-2 tracking-widest uppercase truncate max-w-[130px] md:max-w-none">
+                <span className="truncate">{warData.theirName || 'Enemy Faction'}</span>
+                <div className="w-1.5 h-1.5 md:w-2 md:h-2 shrink-0 bg-rose-400 rounded-sm shadow-[0_0_10px_currentColor]" />
+              </span>
+              <span className="text-4xl md:text-5xl font-mono font-black text-white tracking-tighter drop-shadow-xl">
+                {warData.theirScore.toLocaleString()}
+              </span>
+            </div>
           </div>
           
           {/* Center Target & ETA */}
-          <div className="flex flex-col items-center justify-end pb-1">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.3em] mb-1.5">Target Score</span>
+          <div className="flex flex-col items-center justify-end pb-0 md:pb-1 w-full md:w-auto order-last md:order-2 border-t border-white/5 md:border-t-0 pt-4 md:pt-0">
+            <span className="text-[9px] md:text-[10px] text-zinc-500 font-bold uppercase tracking-[0.3em] mb-1.5">Target Score</span>
             <div className="flex items-center gap-4">
-              <span className="text-4xl font-black font-mono text-white tracking-widest bg-zinc-900/80 px-5 py-1.5 rounded-2xl border border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.15)]">
+              <span className="text-3xl md:text-4xl font-black font-mono text-white tracking-widest bg-zinc-900/80 px-4 md:px-5 py-1 md:py-1.5 rounded-xl md:rounded-2xl border border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.15)]">
                 {warData.target.toLocaleString()}
               </span>
             </div>
-            <span className="text-[11px] text-indigo-400 font-bold uppercase tracking-widest mt-3 flex items-center gap-2">
-              Estimated Finish: <span className="text-sm text-white">{etaStr}</span>
-            </span>
-          </div>
-
-          {/* Their Side */}
-          <div className="flex flex-col gap-1 text-right">
-            <span className="text-sm font-black text-rose-400 flex items-center justify-end gap-2 tracking-widest uppercase">
-              {warData.theirName || 'Enemy Faction'}
-              <div className="w-2 h-2 bg-rose-400 rounded-sm shadow-[0_0_10px_currentColor]" />
-            </span>
-            <span className="text-5xl font-mono font-black text-white tracking-tighter drop-shadow-xl">
-              {warData.theirScore.toLocaleString()}
+            <span className="text-[10px] md:text-[11px] text-indigo-400 font-bold uppercase tracking-widest mt-2 md:mt-3 flex items-center gap-2">
+              Estimated Finish: <span className="text-xs md:text-sm text-white">{etaStr}</span>
             </span>
           </div>
         </div>

@@ -119,7 +119,7 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
       {controls}
       <div className="flex flex-col gap-1 p-2 md:p-4">
         {/* Interactive Header Row */}
-        <div className="flex items-center px-4 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500 border-b border-white/5 mb-2 bg-zinc-900/40 rounded-t-xl">
+        <div className="hidden md:flex items-center px-4 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500 border-b border-white/5 mb-2 bg-zinc-900/40 rounded-t-xl">
           <button
             onClick={() => setSort('name')}
             className={`w-[200px] shrink-0 text-left hover:text-zinc-300 transition-colors flex items-center gap-1 ${filters.sortBy === 'name' ? 'text-indigo-400' : ''}`}
@@ -158,6 +158,17 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
             Refill {getSortIcon('refill')}
           </button>
           <div className="w-[60px] shrink-0 text-right opacity-50 cursor-default" />
+        </div>
+
+        {/* Mobile Sort Controls */}
+        <div className="flex md:hidden items-center justify-between px-3 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 border-b border-white/5 mb-2 bg-zinc-900/40 rounded-t-xl overflow-x-auto gap-4 hide-scrollbar">
+          <div className="flex gap-4 shrink-0">
+             <button onClick={() => setSort('name')} className={`flex items-center gap-1 ${filters.sortBy === 'name' ? 'text-indigo-400' : ''}`}>Name {getSortIcon('name')}</button>
+             <button onClick={() => setSort('power')} className={`flex items-center gap-1 ${filters.sortBy === 'power' ? 'text-indigo-400' : ''}`}>Energy {getSortIcon('power')}</button>
+             <button onClick={() => setSort('stats')} className={`flex items-center gap-1 ${filters.sortBy === 'stats' ? 'text-indigo-400' : ''}`}>Stats {getSortIcon('stats')}</button>
+             <button onClick={() => setSort('status')} className={`flex items-center gap-1 ${filters.sortBy === 'status' ? 'text-indigo-400' : ''}`}>Status {getSortIcon('status')}</button>
+          </div>
+          <button onClick={() => setSort('refill')} className={`shrink-0 flex items-center gap-1 ${filters.sortBy === 'refill' ? 'text-indigo-400' : ''}`}>Refill {getSortIcon('refill')}</button>
         </div>
 
         {processedMembers.map((member) => (
@@ -207,17 +218,37 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       member.last_action?.status === 'Traveling' ? 'text-blue-400' : 'text-zinc-500';
 
   return (
-    <div className={`flex items-center px-4 py-2.5 rounded-xl border border-white/5 bg-zinc-900/20 hover:bg-zinc-800/40 transition-all group ${isSelected ? 'ring-1 ring-indigo-500/50 bg-indigo-500/5' : ''}`}>
+    <div className={`flex flex-wrap md:flex-nowrap items-center px-3 py-3 md:px-4 md:py-2.5 rounded-xl border border-white/5 bg-zinc-900/20 hover:bg-zinc-800/40 transition-all group ${isSelected ? 'ring-1 ring-indigo-500/50 bg-indigo-500/5' : ''}`}>
       {/* Personnel */}
-      <div className="w-[200px] shrink-0 flex items-center gap-3 overflow-hidden">
+      <div className="w-1/2 md:w-[200px] shrink-0 flex items-center gap-2 md:gap-3 overflow-hidden">
+        {/* Mobile Status Dot */}
+        <div className={`md:hidden h-2 w-2 shrink-0 rounded-full ${member.status?.state === 'Okay' ? 'bg-emerald-500' :
+          member.status?.state === 'Hospital' ? 'bg-rose-500' :
+            member.status?.state === 'Traveling' ? 'bg-blue-500' : 'bg-amber-500'
+          }`} />
         <div className="flex flex-col min-w-0">
-          <span className="font-bold text-zinc-100 truncate text-sm tracking-tight">{member.name}</span>
-          <span className="text-[9px] text-zinc-600 font-mono tabular-nums">#{member.id}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-zinc-100 truncate text-sm tracking-tight">{member.name}</span>
+            {/* Mobile Online Dot */}
+            <div className={`md:hidden h-1.5 w-1.5 rounded-full ${member.last_action?.status === 'Online' ? 'bg-green-400' :
+              member.last_action?.status === 'Idle' ? 'bg-amber-400' :
+                member.last_action?.status === 'Traveling' ? 'bg-blue-400' : 'bg-zinc-600'
+              }`} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] text-zinc-600 font-mono tabular-nums">#{member.id}</span>
+            {/* Mobile Stats */}
+            {member.real_stats && (
+              <span className="md:hidden text-[9px] text-indigo-400/70 font-mono tracking-tighter">
+                {member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="w-[100px] shrink-0 flex flex-col items-center justify-center">
+      <div className="hidden md:flex w-[100px] shrink-0 flex-col items-center justify-center">
         {member.real_stats ? (
            <div className="flex items-center gap-1 shrink-0" title="Real Stats">
              <span className="text-[11px] text-indigo-300 font-mono font-black tracking-tighter">
@@ -230,7 +261,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Life Status */}
-      <div className="w-[100px] shrink-0 flex flex-col items-center justify-center gap-1">
+      <div className="hidden md:flex w-[100px] shrink-0 flex-col items-center justify-center gap-1">
         <div className={`h-1 w-1 rounded-full ${member.status?.state === 'Okay' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' :
           member.status?.state === 'Hospital' ? 'bg-rose-500' :
             member.status?.state === 'Traveling' ? 'bg-blue-500' : 'bg-amber-500'
@@ -239,7 +270,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Activity */}
-      <div className="w-[100px] shrink-0 flex flex-col items-center justify-center gap-0.5">
+      <div className="hidden md:flex w-[100px] shrink-0 flex-col items-center justify-center gap-0.5">
         <span className={`text-[10px] font-black uppercase tracking-widest ${onlineColor}`}>{member.last_action?.status}</span>
         {member.last_action?.status === 'Offline' && member.last_action?.relative && (
           <span className="text-[8px] text-zinc-600 font-bold truncate max-w-full tracking-tighter capitalize" title={member.last_action.timestamp ? new Date(member.last_action.timestamp * 1000).toLocaleString() : ''}>
@@ -249,7 +280,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Energy */}
-      <div className="flex-1 flex items-center gap-4 px-4">
+      <div className="w-full md:flex-1 order-3 md:order-0 flex items-center gap-3 md:gap-4 px-1 md:px-4 mt-3 md:mt-0">
         <div className="flex-1 h-1.5 bg-zinc-800/50 rounded-full overflow-hidden border border-white/5 relative">
           <div
             className={`h-full transition-all duration-1000 ${(member.is_pending || (!member.last_updated && !member.has_api)) ? 'bg-zinc-800' : member.energy_predicted ? 'bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.3)]' : 'bg-emerald-500/80 shadow-[0_0_12px_rgba(16,185,129,0.2)]'}`}
@@ -269,7 +300,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Cooldowns */}
-      <div className="w-[260px] shrink-0 flex items-center justify-center gap-2">
+      <div className="w-full md:w-[260px] order-4 md:order-0 shrink-0 flex items-center justify-start md:justify-center gap-2 mt-2 md:mt-0 px-1 md:px-0">
         {member.api_key_invalid ? (
           <span className="text-[10px] text-zinc-600 font-black uppercase tracking-widest" title="API Key is invalid or access level is too low">Invalid Key</span>
         ) : (
@@ -317,7 +348,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Refill Column */}
-      <div className="w-[80px] shrink-0 flex justify-end items-center px-2">
+      <div className="w-1/2 md:w-[80px] shrink-0 flex justify-end items-center px-0 md:px-2">
         {(member.is_pending || (!member.last_updated && !member.has_api)) ? (
           <span className="text-[10px] text-rose-500/50 font-black uppercase tracking-widest animate-pulse">No Data</span>
         ) : !member.last_updated ? (
@@ -346,7 +377,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       </div>
 
       {/* Empty space for alignment */}
-      <div className="w-[60px] shrink-0" />
+      <div className="hidden md:block w-[60px] shrink-0" />
     </div>
   );
 };
