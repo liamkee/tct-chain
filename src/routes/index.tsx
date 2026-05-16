@@ -118,8 +118,8 @@ function DashboardLayout() {
           <div className="px-10 pt-8 grid grid-cols-3 gap-8 items-center">
             {/* Left Wing: Link & Speed */}
             <div className="flex flex-col gap-4">
-              <StatCard 
-                label="Tool Status" 
+              <StatCard
+                label="Tool Status"
                 value={
                   <div className="flex items-center gap-6 w-full">
                     <div className="flex flex-col">
@@ -128,7 +128,7 @@ function DashboardLayout() {
                         <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">
                           {lastUpdatedAt > 0 ? `${Math.round((now + serverClockOffset - lastUpdatedAt) / 1000)}s ago` : 'WAIT'}
                         </span>
-                        <button 
+                        <button
                           onClick={() => {
                             sendCommand('REQ_SYNC', {});
                             toast.success('Sync Request Dispatched');
@@ -142,7 +142,7 @@ function DashboardLayout() {
                         </button>
                       </div>
                     </div>
-                    
+
                     <div className="flex-1 border-l border-white/5 pl-4 flex flex-col gap-1.5 h-[50px] overflow-hidden">
                       {microLogs && microLogs.slice(-3).reverse().map((log, i) => (
                         <div key={i} className="flex items-center gap-2 opacity-80 animate-in fade-in slide-in-from-right-2 duration-300">
@@ -158,15 +158,15 @@ function DashboardLayout() {
                       )}
                     </div>
                   </div>
-                } 
-                sub="System Monitoring & Live Activity" 
-                color={isConnected ? 'text-emerald-400' : 'text-rose-500'} 
+                }
+                sub="System Monitoring & Live Activity"
+                color={isConnected ? 'text-emerald-400' : 'text-rose-500'}
               />
-              <StatCard 
-                label="Speed & ETA" 
-                value={<span className="text-3xl font-black tracking-tighter">{hpm.toFixed(1)}<span className="text-sm font-bold text-zinc-500 ml-2">/ min</span></span>} 
-                sub={trend === 'UP' ? '↑ Increasing' : trend === 'DOWN' ? '↓ Decreasing' : '— Stable'} 
-                color="text-emerald-400" 
+              <StatCard
+                label="Speed & ETA"
+                value={<span className="text-3xl font-black tracking-tighter">{hpm.toFixed(1)}<span className="text-sm font-bold text-zinc-500 ml-2">/ min</span></span>}
+                sub={trend === 'UP' ? '↑ Increasing' : trend === 'DOWN' ? '↓ Decreasing' : '— Stable'}
+                color="text-emerald-400"
                 extra={
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">ETA to {chain.max}</span>
@@ -209,27 +209,27 @@ function DashboardLayout() {
 
             {/* Right Wing: Tactical Hits & Reserves */}
             <div className="flex flex-col gap-4">
-              <StatCard 
-                label="Available Hits" 
+              <StatCard
+                label="Available Hits"
                 value={
                   <span className="text-3xl font-black tracking-tighter">
-                    {Object.keys(members).length > 0 
+                    {Object.keys(members).length > 0
                       ? Math.floor(Object.values(members)
-                          .filter(m => {
-                            if (filters.hideOffline && m.last_action?.status === 'Offline') return false;
-                            if (filters.hideHospital && m.status?.state === 'Hospital') return false;
-                            if (filters.hideTraveling && m.status?.state === 'Traveling') return false;
-                            return true;
-                          })
-                          .reduce((acc, m) => acc + (m.last_updated ? (m.energy || 0) : 0), 0) / 25).toString()
+                        .filter(m => {
+                          if (filters.hideOffline && m.last_action?.status === 'Offline') return false;
+                          if (filters.hideHospital && m.status?.state === 'Hospital') return false;
+                          if (filters.hideTraveling && m.status?.state === 'Traveling') return false;
+                          return true;
+                        })
+                        .reduce((acc, m) => acc + (m.last_updated ? (m.energy || 0) : 0), 0) / 25).toString()
                       : 'NO DATA'}
                   </span>
-                } 
-                sub="Visible Total Energy / 25" 
-                color="text-indigo-400" 
+                }
+                sub="Visible Total Energy / 25"
+                color="text-indigo-400"
               />
-              <StatCard 
-                label="Strategic Reserves" 
+              <StatCard
+                label="Strategic Reserves"
                 value={
                   <div className="flex flex-col gap-2">
                     <span className="text-3xl font-black tracking-tighter">
@@ -265,9 +265,9 @@ function DashboardLayout() {
                       </button>
                     </div>
                   </div>
-                } 
-                sub="Strategic Potential Resources" 
-                color="text-cyan-400" 
+                }
+                sub="Strategic Potential Resources"
+                color="text-cyan-400"
               />
             </div>
           </div>
@@ -279,7 +279,7 @@ function DashboardLayout() {
 
           <footer className="px-6 py-4 text-center border-t border-white/5 bg-zinc-900/60 mt-auto">
             <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-black opacity-60">
-              Torn Chain Tool v1.0 • Authorized Personnel Only
+              Torn Chain Tool v1.1 • Authorized Personnel Only
             </p>
           </footer>
         </div>
@@ -304,8 +304,8 @@ function MasterSwitchControl({ masterSwitch }: { masterSwitch: string }) {
       <button
         onClick={handleToggle}
         className={`px-12 py-4 rounded-3xl border transition-all duration-500 flex items-center gap-4 group hover:scale-[1.02] active:scale-95 ${masterSwitch === 'ON'
-            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.15)]'
-            : 'bg-rose-500/10 border-rose-500/40 text-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.15)]'
+          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.15)]'
+          : 'bg-rose-500/10 border-rose-500/40 text-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.15)]'
           }`}
       >
         <div className={`w-2.5 h-2.5 rounded-full animate-pulse shadow-[0_0_10px_currentColor] ${masterSwitch === 'ON' ? 'bg-emerald-400' : 'bg-rose-400'}`} />

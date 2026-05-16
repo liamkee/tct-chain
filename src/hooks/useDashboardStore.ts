@@ -49,7 +49,7 @@ interface DashboardState {
     hideOffline: boolean;
     hideHospital: boolean;
     hideTraveling: boolean;
-    sortBy: 'name' | 'status' | 'activity' | 'power' | 'refill' | 'none';
+    sortBy: 'name' | 'status' | 'activity' | 'power' | 'refill' | 'stats' | 'none';
     sortOrder: 'asc' | 'desc';
     excludeXanax: boolean;
     excludeFHC: boolean;

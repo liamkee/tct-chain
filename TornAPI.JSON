@@ -238,3 +238,39 @@ Chains History
         }
     ]
 }
+
+
+/user/battlestats
+{
+    "strength": 201359,
+    "speed": 199725,
+    "dexterity": 167758,
+    "defense": 184051,
+    "total": 752893,
+    "strength_modifier": -6,
+    "defense_modifier": -16,
+    "speed_modifier": -7,
+    "dexterity_modifier": -19,
+    "strength_info": [
+        "+18% to Strength from Merits",
+        "+7% to Strength from Faction",
+        "+4% to Strength from Education",
+        "-35% to Strength from Drug"
+    ],
+    "defense_info": [
+        "+18% to Defense from Merits",
+        "+1% to Defense from Faction",
+        "-35% to Defense from Drug"
+    ],
+    "speed_info": [
+        "+15% to Speed from Merits",
+        "+7% to Speed from Faction",
+        "+6% to Speed from Education",
+        "-35% to Speed from Drug"
+    ],
+    "dexterity_info": [
+        "+15% to Dexterity from Merits",
+        "+1% to Dexterity from Education",
+        "-35% to Dexterity from Drug"
+    ]
+}

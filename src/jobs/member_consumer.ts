@@ -45,7 +45,7 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
     const logBatch: string[] = [];
 
     await Promise.allSettled(factionMessages.map(async (message) => {
-      const { tornId, apiKey, ts, test } = message.body;
+      const { tornId, apiKey, ts, test, fetchStats } = message.body;
       
       if (test === 'Ping from health check!') {
         message.ack();
@@ -92,11 +92,20 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
       }
 
       let selections = 'bars,cooldowns,refills';
+      if (fetchStats) selections += ',battlestats';
 
       try {
-        const res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${rawApiKey}`);
-        const data = await res.json() as any;
+        let res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${rawApiKey}`);
+        let data = await res.json() as any;
         
+        // Fallback if battlestats requires higher access level than what the key provides
+        if (data.error && data.error.code === 16 && fetchStats) {
+           console.warn(`[Queue] Member ${tornId} denied battlestats (Code 16). Retrying without it.`);
+           selections = 'bars,cooldowns,refills';
+           res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${rawApiKey}`);
+           data = await res.json() as any;
+        }
+
         if (data.error) {
           const errorCode = data.error.code;
           // Permanent API Key Errors in Torn:
@@ -123,19 +132,35 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
         const energyMax = data.energy?.maximum || 100;
         const isDonator = energyMax > 100;
 
+        const updates: any = {
+          id: tornId.toString(),
+          name: data.name,
+          energy: data.energy?.current,
+          energy_max: data.energy?.maximum || (isDonator ? 150 : 100),
+          cooldowns: data.cooldowns,
+          refill_used: data.refills ? !!data.refills.energy_refill_used : false,
+          last_updated: Math.floor(Date.now() / 1000),
+          api_key_invalid: false // Reset flag on successful sync
+        };
+
+        if (data.battlestats) {
+          const b = data.battlestats;
+          const real_stats = Math.floor(
+            (b.strength || 0) * (1 + (b.strength_modifier || 0) / 100) +
+            (b.defense || 0) * (1 + (b.defense_modifier || 0) / 100) +
+            (b.speed || 0) * (1 + (b.speed_modifier || 0) / 100) +
+            (b.dexterity || 0) * (1 + (b.dexterity_modifier || 0) / 100)
+          );
+          updates.real_stats = real_stats;
+          updates.real_stats_updated = Date.now();
+        } else if (fetchStats) {
+          // Mark it as updated so we don't try again for 24h if it was denied (Code 16)
+          updates.real_stats_updated = Date.now();
+        }
+
         updatesBatch.push({
            id: tornId.toString(),
-           updates: {
-            id: tornId.toString(),
-            name: data.name,
-            energy: data.energy?.current,
-            energy_max: data.energy?.maximum || (isDonator ? 150 : 100),
-
-            cooldowns: data.cooldowns,
-            refill_used: data.refills ? !!data.refills.energy_refill_used : false,
-            last_updated: Math.floor(Date.now() / 1000),
-            api_key_invalid: false // Reset flag on successful sync
-          }
+           updates
         });
 
         logBatch.push(`Sync [${tornId}] ${data.name}: E:${data.energy?.current} CD:${data.cooldowns?.drug || 0}`);

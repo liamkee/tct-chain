@@ -530,8 +530,9 @@ export class ChainMonitor implements DurableObject {
             if (isInitial || statusChanged || actionChanged || isStale) {
               const lastPoll = this.pendingPolls.get(id) || 0;
               if (Date.now() - lastPoll >= 60000) {
+                const fetchStats = !existing?.real_stats_updated || Date.now() - existing.real_stats_updated > 86400000;
                 batch.push({
-                  body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now() }
+                  body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now(), fetchStats }
                 });
                 this.pendingPolls.set(id, Date.now());
               }

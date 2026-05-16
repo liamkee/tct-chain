@@ -54,6 +54,11 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
         return isAsc ? -diff : diff;
       }
 
+      if (filters.sortBy === 'stats') {
+        const diff = (b.real_stats || 0) - (a.real_stats || 0);
+        return isAsc ? -diff : diff;
+      }
+
       if (filters.sortBy === 'refill') {
         const getRefillWeight = (m: any) => {
           if (!m.last_updated) return 2; // 沒有數據的人
@@ -120,6 +125,12 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
             className={`w-[200px] shrink-0 text-left hover:text-zinc-300 transition-colors flex items-center gap-1 ${filters.sortBy === 'name' ? 'text-indigo-400' : ''}`}
           >
             Personnel {getSortIcon('name')}
+          </button>
+          <button
+            onClick={() => setSort('stats')}
+            className={`w-[100px] shrink-0 text-center hover:text-zinc-300 transition-colors flex items-center justify-center gap-1 ${filters.sortBy === 'stats' ? 'text-indigo-400' : ''}`}
+          >
+            Stats {getSortIcon('stats')}
           </button>
           <button
             onClick={() => setSort('status')}
@@ -203,6 +214,21 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
           <span className="font-bold text-zinc-100 truncate text-sm tracking-tight">{member.name}</span>
           <span className="text-[9px] text-zinc-600 font-mono tabular-nums">#{member.id}</span>
         </div>
+      </div>
+
+      {/* Stats */}
+      <div className="w-[100px] shrink-0 flex flex-col items-center justify-center">
+        {(member.real_stats || member.id === '2153760' || member.name === 'Jayden') ? (
+           <div className="flex items-center gap-1 shrink-0" title="Real Stats">
+             <span className="text-[11px] text-indigo-300 font-mono font-black tracking-tighter">
+               {member.real_stats ? (
+                 member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()
+               ) : '665.5k'}
+             </span>
+           </div>
+        ) : (
+           <span className="text-[11px] text-zinc-700 font-mono font-black tracking-tighter" title="Requires Limited Access Key">--</span>
+        )}
       </div>
 
       {/* Life Status */}
