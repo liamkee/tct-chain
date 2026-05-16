@@ -26,6 +26,7 @@ export class ChainMonitor implements DurableObject {
   private lastPersistenceTs: number = 0; // 上次强制存盘时间
   private dbMembersCache: any[] = []; // DB 成员列表内存快取
   private lastDbMembersTs: number = 0; // 上次查 DB 的时间
+  private rankedWarCache: any = null; // 内存态 Ranked War 数据
   private tokenBuckets: Map<string, { tokens: number, resetAt: number }> = new Map(); // 纯内存 Token bucket
   private pendingPolls: Map<string, number> = new Map(); // Action-Driven Polling 追踪
   private masterSwitch: 'ON' | 'OFF' = 'OFF';
@@ -77,6 +78,7 @@ export class ChainMonitor implements DurableObject {
       if (sys.member_minutes_cache) {
         this.memberMinutesCache = new Map(Object.entries(sys.member_minutes_cache));
       }
+      this.rankedWarCache = sys.ranked_war_cache ?? null;
 
       // Restore chain state (1 key instead of 4)
       const chain = storedMap.get('chain_state') ?? {};
@@ -439,6 +441,7 @@ export class ChainMonitor implements DurableObject {
       eta: currentHPM > 0 ? Math.max(0, this.lastChainMax - this.lastChainCurrent) / currentHPM : -1,
       aggregate,
       factionId: this.factionId,
+      rankedWar: this.rankedWarCache,
       lastUpdatedAt: this.lastUpdatedAt,
       microLogs: this.microLogs,
       master_switch: this.masterSwitch,
@@ -482,10 +485,26 @@ export class ChainMonitor implements DurableObject {
 
         const chainData = data.chain;
         const membersData = data.members || {};
+        const rankedWarsData = data.ranked_wars || {};
+
         this.microLogs.push({ ts: Date.now(), msg: `Faction sync: ${Object.keys(membersData).length} members status updated.` });
         if (this.microLogs.length > 20) this.microLogs.shift();
         const storageUpdates: Record<string, any> = {};
         let hasChanges = false;
+
+        // Process Ranked Wars
+        const activeWarIds = Object.keys(rankedWarsData);
+        if (activeWarIds.length > 0) {
+          const warId = activeWarIds[0];
+          const warDetails = rankedWarsData[warId];
+          if (JSON.stringify(this.rankedWarCache) !== JSON.stringify(warDetails)) {
+            this.rankedWarCache = warDetails;
+            hasChanges = true;
+          }
+        } else if (this.rankedWarCache !== null) {
+          this.rankedWarCache = null;
+          hasChanges = true;
+        }
 
         // 4. Process Chain
         if (chainData) {
@@ -585,6 +604,7 @@ export class ChainMonitor implements DurableObject {
             hpm_history: this.hpmHistory,
             last_rtt: this.lastRTT,
             member_status_cache: Object.fromEntries(this.memberStatusCache),
+            ranked_war_cache: this.rankedWarCache,
           };
           await this.state.storage.put(storageUpdates);
         }

@@ -7,6 +7,7 @@ import { useAuthStore } from '../hooks/useAuthStore'
 import { MemberListView } from '../components/MemberListView'
 import { LoginView } from '../components/LoginView'
 import { UpdateApiKeyModal } from '../components/UpdateApiKeyModal'
+import { WarRoom } from '../components/WarRoom'
 import { toast } from 'react-hot-toast'
 
 export const Route = createFileRoute('/')({
@@ -119,9 +120,9 @@ function DashboardLayout() {
           </header>
 
           {/* Tactical Display: Stats Bar */}
-          <div className="px-10 pt-8 grid grid-cols-3 gap-8 items-center">
+          <div className="px-10 pt-8 grid grid-cols-3 gap-8 items-stretch">
             {/* Left Wing: Link & Speed */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 h-full">
               <StatCard
                 label="Tool Status"
                 value={
@@ -185,7 +186,7 @@ function DashboardLayout() {
             </div>
 
             {/* Center Core: Progress & Timeout */}
-            <div className="bg-zinc-900/40 border border-white/10 rounded-[3rem] p-8 flex flex-col items-center justify-center gap-4 shadow-[0_0_50px_rgba(79,70,229,0.1)] relative overflow-hidden group">
+            <div className="bg-zinc-900/40 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center gap-4 shadow-[0_0_50px_rgba(79,70,229,0.1)] relative overflow-hidden group h-full">
               <div className="absolute inset-0 bg-linear-to-b from-indigo-500/5 to-transparent opacity-50" />
 
               <div className="relative z-10 flex flex-col items-center">
@@ -212,7 +213,7 @@ function DashboardLayout() {
             </div>
 
             {/* Right Wing: Tactical Hits & Reserves */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 h-full">
               <StatCard
                 label="Available Hits"
                 value={
@@ -276,6 +277,11 @@ function DashboardLayout() {
             </div>
           </div>
 
+          {/* War Room Section */}
+          <div className="px-10 mt-4">
+            <WarRoom />
+          </div>
+
           {/* Member List Section */}
           <main className="flex-1 p-6">
             <MemberListView resetTimer={resetTimer} />
@@ -336,7 +342,7 @@ function MasterSwitchControl({ masterSwitch }: { masterSwitch: string }) {
 
 function StatCard({ label, value, sub, color, extra }: { label: string, value: React.ReactNode, sub: string, color: string, extra?: React.ReactNode }) {
   return (
-    <div className="bg-zinc-900/40 border border-white/10 rounded-2xl p-4 flex flex-col text-left min-h-[120px] relative overflow-hidden group transition-all hover:border-white/20">
+    <div className="bg-zinc-900/40 border border-white/10 rounded-2xl p-4 flex flex-col text-left min-h-[120px] relative overflow-hidden group transition-all hover:border-white/20 flex-1">
       <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest leading-none mb-3">{label}</span>
       <div className={`font-mono tracking-tighter ${color} leading-none flex-1`}>
         {value}

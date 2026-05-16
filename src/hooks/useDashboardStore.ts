@@ -31,11 +31,14 @@ interface DashboardState {
   members: Record<string, MemberData>;
   chain: ChainStatus;
   globalSelectedMembers: string[];
+  factionId: string | null;
   microLogs: Array<{ ts: number, msg: string }>;
   lastUpdatedAt: number;
   serverClockOffset: number; // DO Time - Local Time
   masterSwitch: 'ON' | 'OFF';
   
+  // Ranked War Data
+  rankedWar: any | null;
   
   // Phase 3 推演数据
   hpm: number;
@@ -82,10 +85,12 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   members: {},
   chain: { current: 0, max: 10, timeout: 300, deadline: 0 },
   globalSelectedMembers: [],
+  factionId: null,
   microLogs: [],
   lastUpdatedAt: 0,
   serverClockOffset: 0,
   masterSwitch: 'OFF',
+  rankedWar: null,
   hpm: 0,
   
   recentHPM: 0,
@@ -140,13 +145,15 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     return { 
       members, 
       chain, 
+      factionId: data.factionId || state.factionId,
       microLogs: logs,
       globalSelectedMembers: data.global_selected_members || [],
       lastUpdatedAt: data.lastUpdatedAt || Date.now(),
       serverClockOffset: offset,
       masterSwitch: data.master_switch || 'OFF',
       filters: state.filters,
-      tacticalAggregate: data.aggregate || null
+      tacticalAggregate: data.aggregate || null,
+      rankedWar: data.rankedWar || null
     };
   }),
 
@@ -224,6 +231,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     console.log(`[Store] Heartbeat: Synced ${Object.keys(data.members || {}).length} members.`);
 
     return {
+      factionId: data.factionId !== undefined ? data.factionId : state.factionId,
       members,
       chain,
       lastUpdatedAt: data.lastUpdatedAt || state.lastUpdatedAt,
@@ -235,7 +243,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       microLogs: data.microLogs || state.microLogs,
       serverClockOffset: offset,
       masterSwitch: data.master_switch || state.masterSwitch,
-      filters: state.filters
+      filters: state.filters,
+      rankedWar: data.rankedWar !== undefined ? data.rankedWar : state.rankedWar
     };
   })
 }));
