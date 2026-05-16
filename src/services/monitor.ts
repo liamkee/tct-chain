@@ -552,14 +552,31 @@ export class ChainMonitor implements DurableObject {
             const statusChanged = !existing ||
               existing.status?.state !== m.status?.state ||
               existing.status?.until !== m.status?.until;
-            const actionChanged = !existing || 
-              existing.last_action?.status !== m.last_action?.status ||
+            const actionStatusChanged = !existing || 
+              existing.last_action?.status !== m.last_action?.status;
+            const actionTimestampChanged = !existing || 
               existing.last_action?.timestamp !== m.last_action?.timestamp;
-            const isStale = existing && (Math.floor(Date.now() / 1000) - (existing.last_updated || 0)) > 900;
+            
+            // Stale check changed to 30 minutes
+            const isStale = existing && (Math.floor(Date.now() / 1000) - (existing.last_updated || 0)) > 1800;
 
-            if (isInitial || statusChanged || actionChanged || isStale) {
+            let shouldPoll = false;
+            let throttleMs = 600000; // default 10 minutes
+
+            if (isInitial || statusChanged || actionStatusChanged) {
+              shouldPoll = true;
+              throttleMs = 60000; // 1 min throttle for critical state changes
+            } else if (actionTimestampChanged) {
+              shouldPoll = true;
+              throttleMs = 600000; // 10 min throttle for just routine activity
+            } else if (isStale) {
+              shouldPoll = true;
+              throttleMs = 1800000; // 30 min throttle for idle staleness
+            }
+
+            if (shouldPoll) {
               const lastPoll = this.pendingPolls.get(id) || 0;
-              if (Date.now() - lastPoll >= 60000) {
+              if (Date.now() - lastPoll >= throttleMs) {
                 const fetchStats = !existing?.real_stats_updated || Date.now() - existing.real_stats_updated > 3600000;
                 batch.push({
                   body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now(), fetchStats }
