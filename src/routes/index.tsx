@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { TacticalCalculator } from '../services/calculator'
 import { useTctSocket } from '../hooks/useTctSocket'
 import { useDashboardStore } from '../hooks/useDashboardStore'
 import { useAuthStore } from '../hooks/useAuthStore'
@@ -35,12 +36,16 @@ function DashboardLayout() {
   const masterSwitch = useDashboardStore(state => state.masterSwitch);
   const lastUpdatedAt = useDashboardStore(state => state.lastUpdatedAt);
   const members = useDashboardStore(state => state.members);
-  const tacticalAggregate = useDashboardStore(state => state.tacticalAggregate);
   const microLogs = useDashboardStore(state => state.microLogs);
   const serverClockOffset = useDashboardStore(state => state.serverClockOffset);
   const { filters, toggleCalcSetting } = useDashboardStore();
+  const globalSelectedMembers = useDashboardStore(state => state.globalSelectedMembers);
   const { sendCommand } = useTctSocket();
-  
+
+  const tacticalAggregate = useMemo(() => {
+    return TacticalCalculator.aggregate(members, globalSelectedMembers, filters);
+  }, [members, globalSelectedMembers, filters]);
+
 
   const [timer, setTimer] = useState('5:00');
   const [now, setNow] = useState(Date.now());
@@ -218,9 +223,7 @@ function DashboardLayout() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const next = !filters.excludeXanax;
                           toggleCalcSetting('excludeXanax');
-                          sendCommand('UPDATE_CALC_SETTINGS', { settings: { excludeXanax: next } });
                         }}
                         className={`px-2 py-0.5 rounded-lg text-[9px] font-black border transition-all ${!filters.excludeXanax ? 'bg-orange-500/20 border-orange-500/30 text-orange-400' : 'bg-zinc-900/50 border-transparent text-zinc-600'}`}
                       >
@@ -229,9 +232,7 @@ function DashboardLayout() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const next = !filters.excludeFHC;
                           toggleCalcSetting('excludeFHC');
-                          sendCommand('UPDATE_CALC_SETTINGS', { settings: { excludeFHC: next } });
                         }}
                         className={`px-2 py-0.5 rounded-lg text-[9px] font-black border transition-all ${!filters.excludeFHC ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-zinc-900/50 border-transparent text-zinc-600'}`}
                       >
@@ -240,9 +241,7 @@ function DashboardLayout() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const next = !filters.excludeRefill;
                           toggleCalcSetting('excludeRefill');
-                          sendCommand('UPDATE_CALC_SETTINGS', { settings: { excludeRefill: next } });
                         }}
                         className={`px-2 py-0.5 rounded-lg text-[9px] font-black border transition-all ${!filters.excludeRefill ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400' : 'bg-zinc-900/50 border-transparent text-zinc-600'}`}
                       >

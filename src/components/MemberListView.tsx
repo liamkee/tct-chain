@@ -1,13 +1,11 @@
 import React from 'react'
 import { useDashboardStore } from '../hooks/useDashboardStore'
-import { useTctSocket } from '../hooks/useTctSocket'
 
 export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer }) => {
   const masterSwitch = useDashboardStore((state) => state.masterSwitch);
   const members = useDashboardStore((state) => state.members);
   const globalSelectedMembers = useDashboardStore((state) => state.globalSelectedMembers);
   const { filters, toggleFilter, setSort } = useDashboardStore();
-  const { sendCommand } = useTctSocket();
 
   if (masterSwitch === 'OFF') return null;
 
@@ -95,29 +93,17 @@ export const MemberListView: React.FC<{ resetTimer: string }> = ({ resetTimer })
     <div className="flex items-center justify-center gap-3 mb-6 px-4 md:px-6">
       <FilterButton
         active={filters.hideOffline}
-        onClick={() => {
-          const next = !filters.hideOffline;
-          toggleFilter('hideOffline');
-          sendCommand('UPDATE_CALC_SETTINGS', { settings: { hideOffline: next } });
-        }}
+        onClick={() => toggleFilter('hideOffline')}
         label="HIDE OFFLINE"
       />
       <FilterButton
         active={filters.hideHospital}
-        onClick={() => {
-          const next = !filters.hideHospital;
-          toggleFilter('hideHospital');
-          sendCommand('UPDATE_CALC_SETTINGS', { settings: { hideHospital: next } });
-        }}
+        onClick={() => toggleFilter('hideHospital')}
         label="HIDE IN HOSP"
       />
       <FilterButton
         active={filters.hideTraveling}
-        onClick={() => {
-          const next = !filters.hideTraveling;
-          toggleFilter('hideTraveling');
-          sendCommand('UPDATE_CALC_SETTINGS', { settings: { hideTraveling: next } });
-        }}
+        onClick={() => toggleFilter('hideTraveling')}
         label="HIDE TRAVELING"
       />
     </div>

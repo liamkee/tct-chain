@@ -139,15 +139,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       lastUpdatedAt: data.lastUpdatedAt || Date.now(),
       serverClockOffset: offset,
       masterSwitch: data.master_switch || 'OFF',
-      filters: {
-        ...state.filters,
-        excludeXanax: data.calc_settings?.excludeXanax ?? state.filters.excludeXanax,
-        excludeFHC: data.calc_settings?.excludeFHC ?? state.filters.excludeFHC,
-        excludeRefill: data.calc_settings?.excludeRefill ?? state.filters.excludeRefill,
-        hideOffline: data.calc_settings?.hideOffline ?? state.filters.hideOffline,
-        hideHospital: data.calc_settings?.hideHospital ?? state.filters.hideHospital,
-        hideTraveling: data.calc_settings?.hideTraveling ?? state.filters.hideTraveling,
-      },
+      filters: state.filters,
       tacticalAggregate: data.aggregate || null
     };
   }),
@@ -237,17 +229,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       microLogs: data.microLogs || state.microLogs,
       serverClockOffset: offset,
       masterSwitch: data.master_switch || state.masterSwitch,
-      filters: {
-        ...state.filters,
-        ...(data.calc_settings ? {
-          excludeXanax: data.calc_settings.excludeXanax ?? state.filters.excludeXanax,
-          excludeFHC: data.calc_settings.excludeFHC ?? state.filters.excludeFHC,
-          excludeRefill: data.calc_settings.excludeRefill ?? state.filters.excludeRefill,
-          hideOffline: data.calc_settings.hideOffline ?? state.filters.hideOffline,
-          hideHospital: data.calc_settings.hideHospital ?? state.filters.hideHospital,
-          hideTraveling: data.calc_settings.hideTraveling ?? state.filters.hideTraveling,
-        } : {})
-      }
+      filters: state.filters
     };
   })
 }));
