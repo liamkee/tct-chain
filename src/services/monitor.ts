@@ -179,9 +179,20 @@ export class ChainMonitor implements DurableObject {
         headers: { 'Content-Type': 'application/json' }
       });
     } else if (url.pathname === '/internal/init') {
-      const { factionId } = await request.json() as { factionId: string };
+      const { factionId, tornId } = await request.json() as { factionId: string, tornId?: string };
       this.factionId = factionId;
       await this.state.storage.put('faction_id', factionId);
+      this.lastDbMembersTs = 0; // Force immediate DB re-sync to get new API keys
+      
+      if (tornId) {
+         this.pendingPolls.delete(tornId); // Allow immediate polling
+         const member = this.memberDataCache.get(tornId);
+         if (member) {
+           member.api_key_invalid = false;
+           this.memberDataCache.set(tornId, member);
+         }
+      }
+      
       return new Response(JSON.stringify({ success: true, factionId }));
     } else if (url.pathname === '/internal/token') {
       const { apiKey, count } = await request.json() as { apiKey: string, count: number };
@@ -530,7 +541,7 @@ export class ChainMonitor implements DurableObject {
             if (isInitial || statusChanged || actionChanged || isStale) {
               const lastPoll = this.pendingPolls.get(id) || 0;
               if (Date.now() - lastPoll >= 60000) {
-                const fetchStats = !existing?.real_stats_updated || Date.now() - existing.real_stats_updated > 86400000;
+                const fetchStats = !existing?.real_stats_updated || Date.now() - existing.real_stats_updated > 3600000;
                 batch.push({
                   body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now(), fetchStats }
                 });

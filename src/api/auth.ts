@@ -248,7 +248,7 @@ auth.post('/bind', async (c) => {
     const monitor = c.env.CHAIN_MONITOR.get(id)
     await monitor.fetch('http://do/internal/init', {
       method: 'POST',
-      body: JSON.stringify({ factionId: factionId.toString() })
+      body: JSON.stringify({ factionId: factionId.toString(), tornId: tornId.toString() })
     })
     // ⚠️ DO NOT automatically start the engine here. 
     // It should only start when the user explicitly clicks the switch 

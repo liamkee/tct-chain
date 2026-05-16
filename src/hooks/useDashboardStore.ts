@@ -11,6 +11,12 @@ interface MemberData {
 
   cooldowns: any;
   last_updated?: number;
+  real_stats?: number;
+  real_stats_updated?: number;
+  is_pending?: boolean;
+  has_api?: boolean;
+  energy_predicted?: boolean;
+  api_key_invalid?: boolean;
 }
 
 interface ChainStatus {

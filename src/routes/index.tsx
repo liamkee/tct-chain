@@ -6,6 +6,7 @@ import { useDashboardStore } from '../hooks/useDashboardStore'
 import { useAuthStore } from '../hooks/useAuthStore'
 import { MemberListView } from '../components/MemberListView'
 import { LoginView } from '../components/LoginView'
+import { UpdateApiKeyModal } from '../components/UpdateApiKeyModal'
 import { toast } from 'react-hot-toast'
 
 export const Route = createFileRoute('/')({
@@ -109,9 +110,12 @@ function DashboardLayout() {
               <MasterSwitchControl masterSwitch={masterSwitch} />
             </div>
 
-            <button onClick={logout} className="px-5 py-2 rounded-xl bg-zinc-900 border border-white/10 text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-100 hover:border-zinc-700 transition-all active:scale-95">
-              Disconnect
-            </button>
+            <div className="flex items-center gap-3">
+              <UpdateApiKeyModal />
+              <button onClick={logout} className="px-5 py-2 rounded-xl bg-zinc-900 border border-white/10 text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-100 hover:border-zinc-700 transition-all active:scale-95">
+                Disconnect
+              </button>
+            </div>
           </header>
 
           {/* Tactical Display: Stats Bar */}

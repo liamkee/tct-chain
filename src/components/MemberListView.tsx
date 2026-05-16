@@ -218,12 +218,10 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
 
       {/* Stats */}
       <div className="w-[100px] shrink-0 flex flex-col items-center justify-center">
-        {(member.real_stats || member.id === '2153760' || member.name === 'Jayden') ? (
+        {member.real_stats ? (
            <div className="flex items-center gap-1 shrink-0" title="Real Stats">
              <span className="text-[11px] text-indigo-300 font-mono font-black tracking-tighter">
-               {member.real_stats ? (
-                 member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()
-               ) : '665.5k'}
+               {member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()}
              </span>
            </div>
         ) : (
@@ -273,12 +271,7 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       {/* Cooldowns */}
       <div className="w-[260px] shrink-0 flex items-center justify-center gap-2">
         {member.api_key_invalid ? (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 animate-pulse" title="API Key Error / Repeated Failures">
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span className="text-[10px] font-black uppercase tracking-wider">API Error - Notify Member</span>
-          </div>
+          <span className="text-[10px] text-zinc-600 font-black uppercase tracking-widest" title="API Key is invalid or access level is too low">Invalid Key</span>
         ) : (
           <>
             {(member.cooldowns?.drug || 0) > 0 && (
