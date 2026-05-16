@@ -143,13 +143,12 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
           api_key_invalid: false // Reset flag on successful sync
         };
 
-        if (data.battlestats) {
-          const b = data.battlestats;
+        if (data.strength !== undefined) {
           const real_stats = Math.floor(
-            (b.strength || 0) * (1 + (b.strength_modifier || 0) / 100) +
-            (b.defense || 0) * (1 + (b.defense_modifier || 0) / 100) +
-            (b.speed || 0) * (1 + (b.speed_modifier || 0) / 100) +
-            (b.dexterity || 0) * (1 + (b.dexterity_modifier || 0) / 100)
+            (data.strength || 0) * (1 + (data.strength_modifier || 0) / 100) +
+            (data.defense || 0) * (1 + (data.defense_modifier || 0) / 100) +
+            (data.speed || 0) * (1 + (data.speed_modifier || 0) / 100) +
+            (data.dexterity || 0) * (1 + (data.dexterity_modifier || 0) / 100)
           );
           updates.real_stats = real_stats;
           updates.real_stats_updated = Date.now();

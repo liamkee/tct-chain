@@ -79,7 +79,7 @@ export function WarRoom() {
         <div className="flex justify-between items-end px-4">
           {/* Our Side */}
           <div className="flex flex-col gap-1 text-left">
-            <span className="text-sm font-black text-emerald-400 flex items-center gap-2 tracking-[0.1em] uppercase">
+            <span className="text-sm font-black text-emerald-400 flex items-center gap-2 tracking-widest uppercase">
               <div className="w-2 h-2 bg-emerald-400 rounded-sm shadow-[0_0_10px_currentColor]" />
               {warData.ourName || 'Our Faction'}
             </span>
@@ -103,7 +103,7 @@ export function WarRoom() {
 
           {/* Their Side */}
           <div className="flex flex-col gap-1 text-right">
-            <span className="text-sm font-black text-rose-400 flex items-center justify-end gap-2 tracking-[0.1em] uppercase">
+            <span className="text-sm font-black text-rose-400 flex items-center justify-end gap-2 tracking-widest uppercase">
               {warData.theirName || 'Enemy Faction'}
               <div className="w-2 h-2 bg-rose-400 rounded-sm shadow-[0_0_10px_currentColor]" />
             </span>
