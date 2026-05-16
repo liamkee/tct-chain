@@ -314,8 +314,14 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
             </span>
           </div>
         ) : (
-          <div className="w-6 h-6 rounded bg-zinc-900/50 flex items-center justify-center text-[9px] font-bold border border-white/5 text-zinc-700" title="Refill Used">
-            R
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rose-500/5 border border-rose-500/20 shadow-inner group-hover:border-rose-500/40 transition-colors" title="Refill Used (Waiting for Reset)">
+            <span className="text-[9px] font-black text-rose-500/80">R</span>
+            <span className="text-[10px] font-mono font-bold text-rose-400 tabular-nums">
+              {(() => {
+                const [h, m] = resetTimer.split(':').map(Number);
+                return h > 0 ? `${h}h` : `${m}m`;
+              })()}
+            </span>
           </div>
         )}
       </div>

@@ -132,7 +132,7 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
             energy_max: data.energy?.maximum || (isDonator ? 150 : 100),
 
             cooldowns: data.cooldowns,
-            refill_used: data.refills ? data.refills.energy === false : false,
+            refill_used: data.refills ? !!data.refills.energy_refill_used : false,
             last_updated: Math.floor(Date.now() / 1000),
             api_key_invalid: false // Reset flag on successful sync
           }

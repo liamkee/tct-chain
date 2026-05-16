@@ -33,6 +33,7 @@ function DashboardLayout() {
   const isConnected = useDashboardStore(state => state.isConnected);
   const hpm = useDashboardStore(state => state.hpm);
   const trend = useDashboardStore(state => state.trend);
+  const eta = useDashboardStore(state => state.eta);
   const masterSwitch = useDashboardStore(state => state.masterSwitch);
   const lastUpdatedAt = useDashboardStore(state => state.lastUpdatedAt);
   const members = useDashboardStore(state => state.members);
@@ -161,7 +162,22 @@ function DashboardLayout() {
                 sub="System Monitoring & Live Activity" 
                 color={isConnected ? 'text-emerald-400' : 'text-rose-500'} 
               />
-              <StatCard label="Speed" value={<span className="text-3xl font-black tracking-tighter">{hpm.toFixed(1)}</span>} sub={trend === 'UP' ? '↑ Increasing' : trend === 'DOWN' ? '↓ Decreasing' : '— Stable'} color="text-emerald-400" />
+              <StatCard 
+                label="Speed & ETA" 
+                value={<span className="text-3xl font-black tracking-tighter">{hpm.toFixed(1)}<span className="text-sm font-bold text-zinc-500 ml-2">/ min</span></span>} 
+                sub={trend === 'UP' ? '↑ Increasing' : trend === 'DOWN' ? '↓ Decreasing' : '— Stable'} 
+                color="text-emerald-400" 
+                extra={
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">ETA to {chain.max}</span>
+                    <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                      {eta > 0 ? (
+                        eta < 1 ? '< 1m' : `${Math.floor(eta / 60) > 0 ? `${Math.floor(eta / 60)}h ` : ''}${Math.floor(eta % 60)}m`
+                      ) : '—'}
+                    </span>
+                  </div>
+                }
+              />
             </div>
 
             {/* Center Core: Progress & Timeout */}

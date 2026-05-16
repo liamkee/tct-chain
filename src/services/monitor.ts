@@ -389,18 +389,26 @@ export class ChainMonitor implements DurableObject {
     // --- HPM & Metrics ---
     let currentHPM = 0;
     let recentHPM = 0;
+    
     if (this.hpmHistory.length >= 6) {
       const last6 = this.hpmHistory.slice(-6);
-      recentHPM = last6.reduce((a, b) => a + b, 0);
-    }
-    if (this.hpmHistory.length > 10) {
-      const sorted = [...this.hpmHistory].sort((a, b) => a - b);
-      const trimmed = sorted.slice(2, -2);
-      const sum = trimmed.reduce((a, b) => a + b, 0);
-      currentHPM = (sum / trimmed.length) * 2;
-    } else {
+      const sumLast6 = last6.reduce((a, b) => a + b, 0);
+      recentHPM = (sumLast6 / last6.length) * 2;
+    } else if (this.hpmHistory.length > 0) {
       const sum = this.hpmHistory.reduce((a, b) => a + b, 0);
-      currentHPM = (sum / (this.hpmHistory.length || 1)) * 2;
+      recentHPM = (sum / this.hpmHistory.length) * 2;
+    }
+
+    if (this.hpmHistory.length >= 6) {
+      const sorted = [...this.hpmHistory].sort((a, b) => a - b);
+      const trimmed = sorted.slice(1, -1);
+      if (trimmed.length > 0) {
+        const sum = trimmed.reduce((a, b) => a + b, 0);
+        currentHPM = (sum / trimmed.length) * 2;
+      }
+    } else if (this.hpmHistory.length > 0) {
+      const sum = this.hpmHistory.reduce((a, b) => a + b, 0);
+      currentHPM = (sum / this.hpmHistory.length) * 2;
     }
 
     // --- Tactical Aggregate ---
@@ -471,6 +479,21 @@ export class ChainMonitor implements DurableObject {
         // 4. Process Chain
         if (chainData) {
           const { timeout, current, max } = chainData;
+          
+          if (this.lastChainCurrent > 0) {
+            if (current < this.lastChainCurrent) {
+               // Chain reset or broke
+               this.hpmHistory = [];
+            } else {
+               const increment = current - this.lastChainCurrent;
+               this.hpmHistory.push(increment);
+               if (this.hpmHistory.length > 10) {
+                 this.hpmHistory.shift();
+               }
+            }
+            hasChanges = true;
+          }
+
           if (current !== this.lastChainCurrent || timeout !== this.lastChainTimeout) {
             storageUpdates['chain_state'] = {
               timeout,
