@@ -232,10 +232,15 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
             style={{ width: `${(member.is_pending || (!member.last_updated && !member.has_api)) ? '0%' : Math.min(100, ((member.energy || 0) / (member.energy_max || 100)) * 100)}%` }}
           />
         </div>
-        <div className="min-w-[65px] text-right">
+        <div className="min-w-[70px] flex flex-col items-end justify-center">
           <span className={`text-[10px] font-black font-mono tabular-nums ${(member.is_pending || (!member.last_updated && !member.has_api)) ? 'text-zinc-800' : member.energy_predicted ? 'text-indigo-400' : 'text-zinc-500'}`}>
             {(member.is_pending || (!member.last_updated && !member.has_api)) ? '--' : member.energy || 0}<span className="text-zinc-700 mx-0.5">/</span>{member.energy_max || 100}
           </span>
+          {!(member.is_pending || (!member.last_updated && !member.has_api)) && (
+            <span className="text-[8px] font-black text-indigo-400/80 uppercase tracking-widest leading-none mt-0.5">
+              {Math.floor((member.energy || 0) / 25)} Hits
+            </span>
+          )}
         </div>
       </div>
 
