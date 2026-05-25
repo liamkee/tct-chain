@@ -1,6 +1,7 @@
 name = "tct-chain"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
+account_id = "22d8202270a22fad99090f0d640da7f5"
 
 [assets]
 directory = "./dist"

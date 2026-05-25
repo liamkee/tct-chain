@@ -119,7 +119,7 @@ function DashboardLayout() {
 
             <div className="flex-1 hidden md:flex items-center justify-end gap-3">
               <Link to="/profile" className="px-5 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 hover:border-indigo-500/50 transition-all active:scale-95">
-                Gym Profile
+                Personal Profile
               </Link>
               <UpdateApiKeyModal />
               <button onClick={logout} className="px-5 py-2 rounded-xl bg-zinc-900 border border-white/10 text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-100 hover:border-zinc-700 transition-all active:scale-95">

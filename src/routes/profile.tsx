@@ -16,8 +16,14 @@ function ProfilePage() {
   const [error, setError] = useState('')
 
   // Simulator State
-  const [selectedGymId, setSelectedGymId] = useState<string>('premier_fitness') // default to valid gym ID
+  const [selectedGymId, setSelectedGymId] = useState<string>(() => {
+    return localStorage.getItem('tct_selected_gym') || 'premier_fitness';
+  })
   const [selectedStat, setSelectedStat] = useState<'strength' | 'speed' | 'defense' | 'dexterity'>('strength')
+
+  useEffect(() => {
+    localStorage.setItem('tct_selected_gym', selectedGymId);
+  }, [selectedGymId]);
   const [trainEnergy, setTrainEnergy] = useState<number>(150)
   const [jumpHappy, setJumpHappy] = useState<number>(0)
   const [jumpType, setJumpType] = useState<string>('normal')
@@ -40,7 +46,8 @@ function ProfilePage() {
       .then((res: any) => {
         if (res.error) throw new Error(res.error)
         setData(res.data)
-        setJumpHappy(res.data.happy || Number(res.data.status?.happy) || 0)
+        setJumpHappy(res.data.happy?.maximum || 4025)
+        setTrainEnergy(res.data.energy?.current || 150)
         setBoosterCd(res.data.cooldowns?.booster || 0)
         setDrugCd(res.data.cooldowns?.drug || 0)
         setLoading(false)
@@ -298,14 +305,14 @@ function ProfilePage() {
                 </select>
               </div>
 
-              <div className="flex gap-4">
-                <div className="flex flex-col gap-2 flex-1">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase">Energy</label>
-                  <input type="number" className="bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={trainEnergy} onChange={e => setTrainEnergy(Number(e.target.value))} />
+              <div className="flex gap-4 w-full min-w-0">
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Energy</label>
+                  <input type="number" className="w-full min-w-0 bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={trainEnergy} onChange={e => setTrainEnergy(Number(e.target.value))} />
                 </div>
-                <div className="flex flex-col gap-2 flex-1">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase">Base Happy</label>
-                  <input type="number" className="bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={jumpHappy} onChange={e => setJumpHappy(Number(e.target.value))} />
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Base Happy</label>
+                  <input type="number" className="w-full min-w-0 bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={jumpHappy} onChange={e => setJumpHappy(Number(e.target.value))} />
                 </div>
               </div>
             </div>

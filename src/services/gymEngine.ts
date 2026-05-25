@@ -47,14 +47,14 @@ export function calculateSingleTrain(
   // 3. 幸福度非線性效應
   const nonLinearHappy = 8 * Math.pow(currentHappy, 1.05);
 
-  // 4. 指數常數項 A * exp(-H / B)
-  const expTerm = Math.exp(-currentHappy / B);
+  // 4. Flat offset term: (1 - (H / 99999)^2) * A + B
+  // Note: C is for RANDBETWEEN(-C, C) which averages to 0, so we omit it for expected value.
+  const flatTerm = (1 - Math.pow(currentHappy / 99999, 2)) * A + B;
 
   // 5. 核心括號加總
-  const bracket = (sEffective * f_H) + nonLinearHappy + (A * expTerm) + C;
+  const bracket = (sEffective * f_H) + nonLinearHappy + flatTerm;
 
   // 6. 計算最終收益
-  // 恢復原本的係數基準： bracket * (1 / 200000) * gymDots * energyPerTrain
   const gain = bracket * (1 / 200000) * gymDots * energyPerTrain * perkMultiplier;
 
   // 7. 計算 Happy 消耗 (期望值算法)
