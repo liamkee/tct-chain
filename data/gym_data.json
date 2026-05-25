@@ -1,0 +1,451 @@
+{
+  "gyms": [
+    {
+      "id": "premier_fitness",
+      "name": "Premier Fitness",
+      "cost_to_unlock": 10,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 2.0,
+        "speed": 2.0,
+        "defense": 2.0,
+        "dexterity": 2.0
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "average_joes",
+      "name": "Average Joes",
+      "cost_to_unlock": 100,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 2.4,
+        "speed": 2.4,
+        "defense": 2.8,
+        "dexterity": 2.4
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "woodys_workout",
+      "name": "Woody's Workout",
+      "cost_to_unlock": 250,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 2.8,
+        "speed": 3.2,
+        "defense": 3.0,
+        "dexterity": 2.8
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "beach_bods",
+      "name": "Beach Bods",
+      "cost_to_unlock": 500,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 3.2,
+        "speed": 3.2,
+        "defense": 3.2,
+        "dexterity": 0.0
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "silver_gym",
+      "name": "Silver Gym",
+      "cost_to_unlock": 1000,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 3.4,
+        "speed": 3.6,
+        "defense": 3.4,
+        "dexterity": 3.2
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "pour_femme",
+      "name": "Pour Femme",
+      "cost_to_unlock": 2500,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 3.4,
+        "speed": 3.6,
+        "defense": 3.6,
+        "dexterity": 3.8
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "davies_den",
+      "name": "Davies Den",
+      "cost_to_unlock": 5000,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 3.7,
+        "speed": 0.0,
+        "defense": 3.7,
+        "dexterity": 3.7
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "global_gym",
+      "name": "Global Gym",
+      "cost_to_unlock": 10000,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 4.0,
+        "speed": 4.0,
+        "defense": 4.0,
+        "dexterity": 4.0
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "knuckle_heads",
+      "name": "Knuckle Heads",
+      "cost_to_unlock": 50000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 4.8,
+        "speed": 4.4,
+        "defense": 4.0,
+        "dexterity": 4.2
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "pioneer_fitness",
+      "name": "Pioneer Fitness",
+      "cost_to_unlock": 100000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 4.4,
+        "speed": 4.6,
+        "defense": 4.8,
+        "dexterity": 4.4
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "anabolic_anomalies",
+      "name": "Anabolic Anomalies",
+      "cost_to_unlock": 250000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 5.0,
+        "speed": 4.6,
+        "defense": 5.2,
+        "dexterity": 4.6
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "core",
+      "name": "Core",
+      "cost_to_unlock": 500000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 5.0,
+        "speed": 5.2,
+        "defense": 5.0,
+        "dexterity": 5.0
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "racing_fitness",
+      "name": "Racing Fitness",
+      "cost_to_unlock": 1000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 5.0,
+        "speed": 5.4,
+        "defense": 4.8,
+        "dexterity": 5.2
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "complete_cardio",
+      "name": "Complete Cardio",
+      "cost_to_unlock": 2000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 5.5,
+        "speed": 5.8,
+        "defense": 5.5,
+        "dexterity": 5.2
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "legs,_bums_and_tums",
+      "name": "Legs, Bums and Tums",
+      "cost_to_unlock": 3000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 0.0,
+        "speed": 5.6,
+        "defense": 5.6,
+        "dexterity": 5.8
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "deep_burn",
+      "name": "Deep Burn",
+      "cost_to_unlock": 5000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 6.0,
+        "speed": 6.0,
+        "defense": 6.0,
+        "dexterity": 6.0
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "apollo_gym",
+      "name": "Apollo Gym",
+      "cost_to_unlock": 7500000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 6.0,
+        "speed": 6.2,
+        "defense": 6.4,
+        "dexterity": 6.2
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "gun_shop",
+      "name": "Gun Shop",
+      "cost_to_unlock": 10000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 6.6,
+        "speed": 6.4,
+        "defense": 6.2,
+        "dexterity": 6.2
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "force_training",
+      "name": "Force Training",
+      "cost_to_unlock": 15000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 6.4,
+        "speed": 6.6,
+        "defense": 6.4,
+        "dexterity": 6.8
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "cha_chas",
+      "name": "Cha Cha's",
+      "cost_to_unlock": 20000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 6.4,
+        "speed": 6.4,
+        "defense": 6.8,
+        "dexterity": 7.0
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "atlas",
+      "name": "Atlas",
+      "cost_to_unlock": 30000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 7.0,
+        "speed": 6.4,
+        "defense": 6.4,
+        "dexterity": 6.6
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "last_round",
+      "name": "Last Round",
+      "cost_to_unlock": 50000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 6.8,
+        "speed": 6.6,
+        "defense": 7.0,
+        "dexterity": 6.6
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "the_edge",
+      "name": "The Edge",
+      "cost_to_unlock": 75000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 6.8,
+        "speed": 7.0,
+        "defense": 7.0,
+        "dexterity": 6.8
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "georges",
+      "name": "George's",
+      "cost_to_unlock": 100000000,
+      "energy_per_train": 10,
+      "multipliers": {
+        "strength": 7.3,
+        "speed": 7.3,
+        "defense": 7.3,
+        "dexterity": 7.3
+      },
+      "unlock_requirements": {}
+    },
+    {
+      "id": "balboas_gym",
+      "name": "Balboas Gym",
+      "cost_to_unlock": 50000000,
+      "energy_per_train": 25,
+      "multipliers": {
+        "strength": 0.0,
+        "speed": 0.0,
+        "dexterity": 7.5,
+        "defense": 7.5
+      },
+      "unlock_requirements": {
+        "description": "Cha Cha's Unlocked; Defense + Dexterity 25% higher than Strength + Speed."
+      }
+    },
+    {
+      "id": "frontline_fitness",
+      "name": "Frontline Fitness",
+      "cost_to_unlock": 50000000,
+      "energy_per_train": 25,
+      "multipliers": {
+        "strength": 7.5,
+        "speed": 7.5,
+        "dexterity": 0.0,
+        "defense": 0.0
+      },
+      "unlock_requirements": {
+        "description": "Cha Cha's Unlocked; Strength + Speed 25% higher than Dexterity + Defense"
+      }
+    },
+    {
+      "id": "gym_3000",
+      "name": "Gym 3000",
+      "cost_to_unlock": 100000000,
+      "energy_per_train": 50,
+      "multipliers": {
+        "strength": 8.0,
+        "speed": 0.0,
+        "dexterity": 0.0,
+        "defense": 0.0
+      },
+      "unlock_requirements": {
+        "description": "George's unlocked; Strength 25% higher than your second highest stat"
+      }
+    },
+    {
+      "id": "mr._isoyamas",
+      "name": "Mr. Isoyamas",
+      "cost_to_unlock": 100000000,
+      "energy_per_train": 50,
+      "multipliers": {
+        "strength": 0.0,
+        "speed": 0.0,
+        "dexterity": 0.0,
+        "defense": 8.0
+      },
+      "unlock_requirements": {
+        "description": "George's unlocked; Defense 25% higher than your second highest stat"
+      }
+    },
+    {
+      "id": "total_rebound",
+      "name": "Total Rebound",
+      "cost_to_unlock": 100000000,
+      "energy_per_train": 50,
+      "multipliers": {
+        "strength": 0.0,
+        "speed": 8.0,
+        "dexterity": 0.0,
+        "defense": 0.0
+      },
+      "unlock_requirements": {
+        "description": "George's unlocked; Speed 25% higher than your second highest stat"
+      }
+    },
+    {
+      "id": "elites",
+      "name": "Elites",
+      "cost_to_unlock": 100000000,
+      "energy_per_train": 50,
+      "multipliers": {
+        "strength": 0.0,
+        "speed": 0.0,
+        "dexterity": 8.0,
+        "defense": 0.0
+      },
+      "unlock_requirements": {
+        "description": "George's unlocked; Dexterity 25% higher than your second highest stat"
+      }
+    },
+    {
+      "id": "the_sports_science_lab",
+      "name": "The Sports Science Lab",
+      "cost_to_unlock": 500000000,
+      "energy_per_train": 25,
+      "multipliers": {
+        "strength": 9.0,
+        "speed": 9.0,
+        "dexterity": 9.0,
+        "defense": 9.0
+      },
+      "unlock_requirements": {
+        "description": "Last Rounds unlocked; a MAXIMUM of 150 Xanax and Ecstasy combined taken in total"
+      }
+    },
+    {
+      "id": "unknown",
+      "name": "Unknown",
+      "cost_to_unlock": 0,
+      "energy_per_train": 0,
+      "multipliers": {
+        "strength": 0.0,
+        "speed": 0.0,
+        "dexterity": 0.0,
+        "defense": 0.0
+      },
+      "unlock_requirements": {
+        "description": "Well, unknown..."
+      }
+    },
+    {
+      "id": "jail_gym_crims_gym",
+      "name": "Jail Gym (Crims Gym)",
+      "cost_to_unlock": 0,
+      "energy_per_train": 5,
+      "multipliers": {
+        "strength": 3.4,
+        "speed": 3.4,
+        "defense": 4.6,
+        "dexterity": 0.0
+      },
+      "unlock_requirements": {
+        "description": "Unlocked automatically"
+      }
+    }
+  ]
+}

@@ -88,8 +88,8 @@ export class TacticalCalculator {
     const ticksElapsed = Math.max(0, nowTickIndex - lastTickIndex);
 
     // 修正：當現有能量已達到或超出上限時，不再進行回能計算，保持原有溢出能量
-    const newEnergy = lastEnergy >= energyMax 
-      ? lastEnergy 
+    const newEnergy = lastEnergy >= energyMax
+      ? lastEnergy
       : Math.min(lastEnergy + ticksElapsed * TORN_RULES.REGEN_AMOUNT, energyMax);
 
     return {
@@ -145,7 +145,7 @@ export class TacticalCalculator {
   private static getBaseAvailableEnergy(member: MemberTacticalData): number {
     const { energy, energy_max, refill_used } = member;
     let total = energy || 0;
-    
+
     // 如果 Refill 沒用過，計入一次
     if (!refill_used) {
       total += getItemEnergy(TORN_ITEMS.REFILL, energy_max);
@@ -159,14 +159,14 @@ export class TacticalCalculator {
    */
   static calculatePotential(member: MemberTacticalData) {
     const { energy_max, status } = member;
-    
+
     // 1. 判斷是否“可出擊”：只要沒住院、沒坐牢、沒旅遊，能量就是隨時可用的
     const isTacticallyAvailable = !['Hospital', 'Jail', 'Traveling'].includes(status.state);
-    
+
     // 2. 計算當前能量 (不含資源)
     const currentEnergy = member.energy || 0;
     const availableHits = Math.floor(currentEnergy / TORN_RULES.ENERGY_PER_HIT);
-    
+
     return {
       isAvailable: isTacticallyAvailable,
       availableHits,
@@ -178,7 +178,7 @@ export class TacticalCalculator {
    * 爆發力推演 (Burst Potential) - 現有 + Refill + 1 Xanax + FHCs
    */
   static predictBurstPotential(member: MemberTacticalData, options: { excludeXanax?: boolean, excludeFHC?: boolean, excludeRefill?: boolean } = {}) {
-  
+
     const { energy_max, cooldowns, status } = member;
 
 
@@ -199,15 +199,21 @@ export class TacticalCalculator {
     // 3. FHC (Booster cooldown limit is 24h = 86400s)
     let fhcCount = 0;
     const currentBoosterCd = cooldowns?.booster || 0;
-    if (currentBoosterCd < TORN_RULES.BOOSTER_CD_THRESHOLD && !options.excludeFHC) {
+    if (currentBoosterCd <= TORN_RULES.BOOSTER_CD_THRESHOLD && !options.excludeFHC) {
       // Calculate how many FHCs (6h = 21600s) can be taken
-      fhcCount = Math.ceil((TORN_RULES.BOOSTER_CD_THRESHOLD - currentBoosterCd) / 21600);
+      // Adding 1 second to threshold perfectly handles Torn's "Over-stacking" wait-1-second mechanic
+      fhcCount = Math.ceil((TORN_RULES.BOOSTER_CD_THRESHOLD + 1 - currentBoosterCd) / 21600);
       totalEnergy += fhcCount * (energy_max || 100);
     }
 
+    const currentEnergy = member.energy || 0;
+    const currentHits = Math.floor(currentEnergy / TORN_RULES.ENERGY_PER_HIT);
+    const totalHits = Math.floor(totalEnergy / TORN_RULES.ENERGY_PER_HIT);
+
     return {
       totalPotentialEnergy: totalEnergy,
-      maxPotentialHits: Math.floor(totalEnergy / TORN_RULES.ENERGY_PER_HIT),
+      maxPotentialHits: totalHits,
+      reserveHits: totalHits - currentHits,
       resourcesUsed: {
         xanax: xanaxCount,
         refill: !member.refill_used,
@@ -222,7 +228,7 @@ export class TacticalCalculator {
    */
   static predictPotentialOverTime(member: MemberTacticalData, targetMinutes: number, options: { excludeXanax?: boolean } = {}) {
     const { cooldowns, status, energy_max } = member;
-    
+
     // 1. 基礎可用能量 (當前，不含 Refill)
     let totalEnergy = member.energy || 0;
 
@@ -230,7 +236,7 @@ export class TacticalCalculator {
     const now = Math.floor(Date.now() / 1000);
     const hospRemainingSeconds = Math.max(0, (status.until || 0) - now);
     const hospRemainingMinutes = Math.ceil(hospRemainingSeconds / 60);
-    
+
     const effectiveRegenMinutes = Math.max(0, targetMinutes - hospRemainingMinutes);
     const isDonator = (energy_max || 100) > 100;
     const regenInterval = isDonator ? TORN_RULES.REGEN_INTERVAL_DONATOR : TORN_RULES.REGEN_INTERVAL_NORMAL;
@@ -250,9 +256,9 @@ export class TacticalCalculator {
     };
   }
 
-  static aggregate(members: Record<string, any>, selectedIds?: string[], options: { 
-    excludeXanax?: boolean, 
-    excludeFHC?: boolean, 
+  static aggregate(members: Record<string, any>, selectedIds?: string[], options: {
+    excludeXanax?: boolean,
+    excludeFHC?: boolean,
     excludeRefill?: boolean,
     hideOffline?: boolean,
     hideHospital?: boolean,
@@ -260,9 +266,10 @@ export class TacticalCalculator {
   } = {}) {
     let totalAvailableHits = 0;
     let totalBurstHits = 0;
+    let totalReserveHits = 0;
     let totalProjectedHits1h = 0;
-    
-    const targetMembers = selectedIds && selectedIds.length > 0 
+
+    const targetMembers = selectedIds && selectedIds.length > 0
       ? Object.entries(members).filter(([id]) => selectedIds.includes(id))
       : Object.entries(members);
 
@@ -272,7 +279,7 @@ export class TacticalCalculator {
       const memberData = data as MemberTacticalData;
       // Skip members who have never been polled successfully
       if (!memberData.last_updated) return;
-      
+
       // Apply visibility filters to the calculation
       if (options.hideOffline && memberData.last_action?.status === 'Offline') return;
       if (options.hideHospital && memberData.status?.state === 'Hospital') return;
@@ -282,8 +289,9 @@ export class TacticalCalculator {
       const current = TacticalCalculator.calculatePotential(memberData);
       const burst = TacticalCalculator.predictBurstPotential(memberData, options);
       const projected1h = TacticalCalculator.predictPotentialOverTime(memberData, 60, options);
-      
+
       totalBurstHits += burst.maxPotentialHits;
+      totalReserveHits += burst.reserveHits;
       totalProjectedHits1h += projected1h.potentialHits;
       if (current.isAvailable) {
         totalAvailableHits += current.availableHits;
@@ -293,6 +301,7 @@ export class TacticalCalculator {
     return {
       totalAvailableHits,
       totalMaxPotentialHits: totalBurstHits,
+      totalReserveHits,
       totalProjectedHits1h,
       memberCount: validMemberCount
     };

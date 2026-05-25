@@ -7,6 +7,7 @@ import auth from './auth'
 import admin from './admin'
 import dashboard from './dashboard'
 import discord from './discord'
+import profile from './profile'
 
 // Single source of truth for Env type — defined in src/index.ts
 export type { Env } from '../index'
@@ -18,6 +19,7 @@ api.route('/auth', auth)
 api.route('/admin', admin)
 api.route('/dashboard', dashboard)
 api.route('/discord', discord)
+api.route('/profile', profile)
 
 // Development/Test Routes (Restricted)
 api.use('/test/*', async (c, next) => {

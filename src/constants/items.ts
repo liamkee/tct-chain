@@ -28,7 +28,8 @@ export interface ItemDefinition {
   name: string;
   type: CooldownType;
   // 'full_refill' means 100 or 150 depending on donator status
-  energy: number | 'full_refill';
+  energy?: number | 'full_refill';
+  happy?: number | 'double'; // Can be a fixed number or 'double' for Ecstasy
   cooldown: {
     base: number;        // For fixed items (e.g. FHC) or min for random items
     max?: number;        // For random items (e.g. Xanax)
@@ -38,33 +39,78 @@ export interface ItemDefinition {
 export const TORN_ITEMS: Record<string, ItemDefinition> = {
   // --- DRUGS ---
   XANAX: {
-    id: 'xanax',
+    id: '206',
     name: 'Xanax',
     type: 'drug',
     energy: 250,
-    cooldown: {
-      base: 360, // 6 hours
-      max: 480   // 8 hours
-    }
+    happy: -75, // Xanax normally gives -75 happy
+    cooldown: { base: 360, max: 480 } // 6-8 hours
+  },
+  ECSTASY: {
+    id: '197',
+    name: 'Ecstasy',
+    type: 'drug',
+    happy: 'double',
+    cooldown: { base: 200, max: 231 } // 200-231 mins
   },
 
   // --- BOOSTERS ---
   FHC: {
-    id: 'fhc',
+    id: '367',
     name: 'Feathery Hotel Coupon',
     type: 'booster',
-    energy: 'full_refill', // Changed to dynamic
-    cooldown: {
-      base: 360 // Fixed 6 hours
-    }
+    energy: 'full_refill',
+    happy: 500, // FHC also gives 500 happy
+    cooldown: { base: 360 } // Fixed 6 hours
   },
+  EDVD: {
+    id: '366',
+    name: 'Erotic DVD',
+    type: 'booster',
+    happy: 2500,
+    cooldown: { base: 360 } // 6 hours
+  },
+  LOLLIPOP: {
+    id: '310',
+    name: 'Lollipop',
+    type: 'booster',
+    happy: 25,
+    cooldown: { base: 30 }
+  },
+  TOOTSIE_ROLLS: {
+    id: '528',
+    name: 'Bag of Tootsie Rolls',
+    type: 'booster',
+    happy: 75,
+    cooldown: { base: 30 }
+  },
+  TRUFFLES: {
+    id: '529',
+    name: 'Bag of Chocolate Truffles',
+    type: 'booster',
+    happy: 100,
+    cooldown: { base: 30 }
+  },
+
+  // --- SPECIAL ---
   REFILL: {
     id: 'refill',
     name: 'Daily Energy Refill',
     type: 'special' as any,
     energy: 'full_refill',
-    cooldown: { base: 0 } // No cooldown, but limited by 'refill_used' flag
+    cooldown: { base: 0 }
   }
+};
+
+export const ITEM_PRICES = {
+  XANAX: 850000,
+  EDVD: 4200000,
+  ECSTASY: 43000,
+  TRUFFLES: 140000, // ID 529: Bag of Chocolate Truffles (+100 Happy)
+  TOOTSIE: 80000,   // ID 528: Bag of Tootsie Rolls (+75 Happy)
+  POINT: 33000,     // Point (Torn 點數)
+  FHC: 14000000,    // ID 367: Feathery Hotel Coupon
+  LOLLIPOP: 800     // ID 310: Lollipop (+25 Happy)
 };
 
 /**
@@ -74,7 +120,7 @@ export const getItemEnergy = (item: ItemDefinition, maxEnergy?: number): number 
   if (item.energy === 'full_refill') {
     return maxEnergy || TORN_RULES.BASE_ENERGY_NORMAL;
   }
-  return item.energy;
+  return item.energy || 0;
 };
 
 /**

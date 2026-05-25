@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { TacticalCalculator } from '../services/calculator'
 import { useTctSocket } from '../hooks/useTctSocket'
 import { useDashboardStore } from '../hooks/useDashboardStore'
@@ -99,7 +99,7 @@ function DashboardLayout() {
         <div className="relative z-10 flex flex-col flex-1">
           {/* Header */}
           <header className="border-b border-white/5 bg-zinc-900/40 backdrop-blur-md px-4 md:px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6">
-            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+            <div className="flex-1 flex items-center gap-3 w-full justify-between md:justify-start">
               <div className="flex items-center gap-3">
                 <img src="/logo.avif" alt="Logo" className="w-9 h-9 object-cover" />
                 <div className="flex flex-col text-left">
@@ -113,11 +113,14 @@ function DashboardLayout() {
               </button>
             </div>
 
-            <div className="flex-1 flex justify-center items-center gap-4 w-full md:w-auto">
+            <div className="flex-none flex justify-center items-center gap-4 w-full md:w-auto">
               <MasterSwitchControl masterSwitch={masterSwitch} />
             </div>
 
-            <div className="hidden md:flex items-center gap-3">
+            <div className="flex-1 hidden md:flex items-center justify-end gap-3">
+              <Link to="/profile" className="px-5 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 hover:border-indigo-500/50 transition-all active:scale-95">
+                Gym Profile
+              </Link>
               <UpdateApiKeyModal />
               <button onClick={logout} className="px-5 py-2 rounded-xl bg-zinc-900 border border-white/10 text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-100 hover:border-zinc-700 transition-all active:scale-95">
                 Disconnect
@@ -249,7 +252,7 @@ function DashboardLayout() {
                 value={
                   <div className="flex flex-col gap-2">
                     <span className="text-3xl font-black tracking-tighter">
-                      {tacticalAggregate ? `+${tacticalAggregate.totalMaxPotentialHits - tacticalAggregate.totalAvailableHits}` : 'NO DATA'}
+                      {tacticalAggregate ? `+${tacticalAggregate.totalReserveHits}` : 'NO DATA'}
                     </span>
                     <div className="flex gap-1.5 p-1 bg-zinc-800/40 rounded-xl border border-white/10 self-start">
                       <button
