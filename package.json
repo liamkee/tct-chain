@@ -8,7 +8,7 @@
     "dev:all": "npm run db:migrate:local && (npm run dev:vite & wrangler dev)",
     "dev:vite": "vite",
     "build": "vite build",
-    "deploy": "npm run build && npm run db:migrate:remote && wrangler deploy",
+    "deploy": "npm run build && (npm run db:migrate:remote || true) && wrangler deploy",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply tct-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply tct-db --remote",
