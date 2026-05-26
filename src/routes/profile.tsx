@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { calculateBatchTrain } from '../services/gymEngine'
 import { calculate24hYield, calculateJumpStatGain } from '../services/jumpOptimizer'
 import { calculateJump } from '../services/jumpCalculator'
+import { JumpTimeline } from '../components/JumpTimeline'
 import type { TrainResult, BatchTrainResult } from '../services/gymEngine'
 import { calculateGymModifiersFromPerks } from '../utils/gymPerksParser'
 import { ITEM_PRICES } from '../constants/items'
@@ -29,12 +29,14 @@ function ProfilePage() {
     localStorage.setItem('tct_selected_gym', selectedGymId);
   }, [selectedGymId]);
   const [currentJump, setCurrentJump] = useState<any>(null)
+  const [currentConfig, setCurrentConfig] = useState<any>(null)
   const [jumpCost, setJumpCost] = useState<number>(0)
   const [isStackedJump, setIsStackedJump] = useState<boolean>(false)
   const [jumpHasRefill, setJumpHasRefill] = useState<boolean>(false)
 
   const [baseEnergy, setBaseEnergy] = useState<number>(150)
   const [baseHappy, setBaseHappy] = useState<number>(4000)
+  const [editableStats, setEditableStats] = useState<Record<string, number> | null>(null);
 
   // Live Cooldown States
   const [boosterCd, setBoosterCd] = useState<number>(0)
@@ -58,6 +60,12 @@ function ProfilePage() {
         setBaseEnergy(res.data.energy?.current || 150)
         setBoosterCd(res.data.cooldowns?.booster || 0)
         setDrugCd(res.data.cooldowns?.drug || 0)
+        setEditableStats({
+          strength: Number(res.data.battlestats?.strength || 10),
+          defense: Number(res.data.battlestats?.defense || 10),
+          speed: Number(res.data.battlestats?.speed || 10),
+          dexterity: Number(res.data.battlestats?.dexterity || 10),
+        })
         setLoading(false)
       })
       .catch(err => {
@@ -110,7 +118,7 @@ function ProfilePage() {
     const gym = gymData.gyms.find((g: any) => g.id === String(selectedGymId) || g.id === Number(selectedGymId))
     if (!gym) return null
 
-    const currentStatVal = (data.battlestats?.[selectedStat] as number) || 10
+    const currentStatVal = editableStats ? editableStats[selectedStat] : ((data.battlestats?.[selectedStat] as number) || 10);
     const gymDots = gym.multipliers?.[selectedStat] || 0
     if (gymDots === 0) return null
 
@@ -124,7 +132,9 @@ function ProfilePage() {
       currentStatVal,
       gymDots,
       energyPerTrain,
-      perkMult
+      perkMult,
+      currentConfig,
+      baseHappy
     );
 
     return {
@@ -132,18 +142,27 @@ function ProfilePage() {
       totalEnergySpent: currentJump.totalEnergy,
       totalHappyLost: currentJump.peakHappy - res.finalHappy
     };
-  }, [data, multipliers, selectedGymId, selectedStat, currentJump])
+  }, [data, multipliers, selectedGymId, selectedStat, currentJump, editableStats, currentConfig, baseHappy])
 
   const yield24h = useMemo(() => {
     if (!simulationResult || !data || !multipliers) return null;
     const activeGym = gymData.gyms.find((g: any) => g.id === String(selectedGymId) || g.id === Number(selectedGymId));
     if (!activeGym) return null;
 
-    const currentStatVal = data.battlestats?.[selectedStat] as number || 10;
+    const currentStatVal = editableStats ? editableStats[selectedStat] : ((data.battlestats?.[selectedStat] as number) || 10);
     const gymDots = activeGym.multipliers?.[selectedStat] || 0;
     const perkMult = multipliers[selectedStat] || 1;
     const energyPerTrain = activeGym.energy_per_train || 10;
     const naturalEnergyPerDay = (data.donator === 1) ? 720 : 480;
+
+    // Check if it's a daily routine preset (both extra and standard)
+    const isDaily = currentConfig && currentConfig.xanax === 3 && currentConfig.refill === 1;
+    if (isDaily) {
+      return {
+        gain24h: simulationResult.totalStatGained,
+        cost24h: jumpCost
+      };
+    }
 
     const timeMins = currentJump.prepTimeMins + currentJump.totalDrugCdMins + currentJump.totalBoosterCdMins;
 
@@ -161,58 +180,15 @@ function ProfilePage() {
       perkMult,
       naturalEnergyPerDay
     );
-  }, [simulationResult, data, multipliers, selectedGymId, selectedStat, jumpCost, currentJump, isStackedJump, jumpHasRefill, baseHappy]);
+  }, [simulationResult, data, multipliers, selectedGymId, selectedStat, jumpCost, currentJump, isStackedJump, jumpHasRefill, baseHappy, editableStats, currentConfig]);
 
-  const roiAnalysis = useMemo(() => {
-    if (!data || !multipliers) return null
-    const gym = gymData.gyms.find((g: any) => g.id === String(selectedGymId) || g.id === Number(selectedGymId))
-    if (!gym) return null
-
-    const currentStatVal = (data.battlestats?.[selectedStat] as number) || 10
-    const gymDots = gym.multipliers?.[selectedStat] || 0
-    if (gymDots === 0) return null
-    const perkMult = multipliers[selectedStat]
-
-    const baseHappy = data.happy?.maximum || 4000;
-
-    // 1. Standard Xanax Train
-    // Cost: 1 Xanax
-    // Action: 250 Energy, Base Happy
-    const xanaxCost = ITEM_PRICES.XANAX;
-    const xanaxResult = calculateBatchTrain(selectedStat, currentStatVal, baseHappy, 250, gymDots, gym.energy_per_train || 10, perkMult);
-    const xanaxCostPerStat = xanaxCost / xanaxResult.totalStatGained;
-
-    // 2. eDVD Jump (1000E)
-    // Cost: 5 eDVD + 1 Ecstasy + 4 Xanax
-    // Action: 1000 Energy, (Base + 12500) * 2 Happy
-    const edvdCost = (5 * ITEM_PRICES.EDVD) + ITEM_PRICES.ECSTASY + (4 * ITEM_PRICES.XANAX);
-    const edvdInitialHappy = (baseHappy + 12500) * 2;
-    const edvdResult = calculateBatchTrain(selectedStat, currentStatVal, edvdInitialHappy, 1000, gymDots, gym.energy_per_train || 10, perkMult);
-    const edvdCostPerStat = edvdCost / edvdResult.totalStatGained;
-
-    // 3. Choco Jump (49 Truffles)
-    // Cost: 49 Truffles + 1 Ecstasy + 4 Xanax
-    // Action: 1000 Energy, (Base + 4900) * 2 Happy
-    const chocoCost = (49 * ITEM_PRICES.TRUFFLES) + ITEM_PRICES.ECSTASY + (4 * ITEM_PRICES.XANAX);
-    const chocoInitialHappy = (baseHappy + 4900) * 2;
-    const chocoResult = calculateBatchTrain(selectedStat, currentStatVal, chocoInitialHappy, 1000, gymDots, gym.energy_per_train || 10, perkMult);
-    const chocoCostPerStat = chocoCost / chocoResult.totalStatGained;
-
-    const minCps = Math.min(xanaxCostPerStat, edvdCostPerStat, chocoCostPerStat);
-
-    return {
-      xanax: { cost: xanaxCost, gain: xanaxResult.totalStatGained, cps: xanaxCostPerStat, isBest: xanaxCostPerStat === minCps },
-      edvd: { cost: edvdCost, gain: edvdResult.totalStatGained, cps: edvdCostPerStat, isBest: edvdCostPerStat === minCps },
-      choco: { cost: chocoCost, gain: chocoResult.totalStatGained, cps: chocoCostPerStat, isBest: chocoCostPerStat === minCps }
-    }
-  }, [data, multipliers, selectedGymId, selectedStat])
 
   if (loading) return <div className="min-h-screen bg-black text-white p-10">Loading Profile...</div>
   if (error) return <div className="min-h-screen bg-black text-red-500 p-10">Error: {error}</div>
   if (!data) return null
 
   const activeGym = gymData.gyms.find((g: any) => g.id === String(selectedGymId) || g.id === Number(selectedGymId));
-  const currentStatVal = data.battlestats?.[selectedStat] as number || 10;
+  const currentStatVal = editableStats ? editableStats[selectedStat] : ((data.battlestats?.[selectedStat] as number) || 10);
   const gymDots = activeGym?.multipliers?.[selectedStat] || 0;
   const perkMult = multipliers?.[selectedStat] || 1;
   const energyPerTrain = activeGym?.energy_per_train || 10;
@@ -240,9 +216,8 @@ function ProfilePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="flex flex-col gap-6 w-full">
           {/* Tactical Overview */}
-          <div className="flex flex-col gap-4">
             <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-4">
               <h2 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Current Status</h2>
 
@@ -252,7 +227,7 @@ function ProfilePage() {
               </div>
               <div className="flex justify-between items-center bg-zinc-950 p-4 rounded-xl border border-white/5">
                 <span className="text-sm font-bold text-zinc-400">Happy</span>
-                <span className="text-xl font-mono text-yellow-400">{data.happy?.current || jumpHappy}</span>
+                <span className="text-xl font-mono text-yellow-400">{data.happy?.current || baseHappy}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mt-2">
@@ -271,54 +246,14 @@ function ProfilePage() {
               </div>
             </div>
 
-            <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-4">
-              <h2 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Battle Stats</h2>
-              <div className="grid grid-cols-2 gap-3">
-                {['strength', 'speed', 'defense', 'dexterity'].map(stat => (
-                  <div key={stat} className="bg-zinc-950 p-3 rounded-xl border border-white/5 flex flex-col items-center">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{stat}</span>
-                    <span className="font-mono text-sm text-indigo-300 mt-1">
-                      {Number(data.battlestats?.[stat] || 10).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {/* Happy Jump Simulator */}
-          <div className="lg:col-span-2 bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-6">
+          <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-6 w-full">
             <h2 className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.2em]">Gym Simulator (Vladar Formula)</h2>
 
             {/* Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
-              {/* Target Stat - 4 Blocks */}
               <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[10px] text-zinc-400 font-bold uppercase">Target Stat</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {[
-                    { id: 'strength', label: 'Strength' },
-                    { id: 'speed', label: 'Speed' },
-                    { id: 'defense', label: 'Defense' },
-                    { id: 'dexterity', label: 'Dexterity' }
-                  ].map(stat => (
-                    <button
-                      key={stat.id}
-                      onClick={() => setSelectedStat(stat.id as any)}
-                      className={`p-3 rounded-xl border font-black text-sm tracking-widest transition-all duration-200 flex justify-center items-center ${
-                        selectedStat === stat.id 
-                          ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
-                          : 'bg-zinc-950 border-white/5 text-zinc-500 hover:border-white/20 hover:text-white'
-                      }`}
-                    >
-                      {stat.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
                 <label className="text-[10px] text-zinc-400 font-bold uppercase">Gym</label>
                 <CustomSelect
                   value={selectedGymId}
@@ -331,6 +266,71 @@ function ProfilePage() {
                     { label: '--- Other Gyms ---', options: gymData.gyms.slice(31).map((g: any) => ({ value: g.id, label: `${g.name} (${g.energy_per_train}E)` })) }
                   ]}
                 />
+              </div>
+              
+              {/* Target Stat - 4 Blocks */}
+              <div className="flex flex-col gap-2 md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] text-zinc-400 font-bold uppercase">Target Stat</label>
+                  <button 
+                    onClick={() => {
+                      if (data?.battlestats) {
+                        setEditableStats({
+                          strength: Number(data.battlestats.strength || 10),
+                          defense: Number(data.battlestats.defense || 10),
+                          speed: Number(data.battlestats.speed || 10),
+                          dexterity: Number(data.battlestats.dexterity || 10),
+                        });
+                      }
+                    }}
+                    className="text-[9px] text-zinc-500 hover:text-indigo-400 font-bold uppercase tracking-widest transition-colors flex items-center gap-1"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reset to Actual
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {[
+                    { id: 'strength', label: 'Strength' },
+                    { id: 'defense', label: 'Defense' },
+                    { id: 'speed', label: 'Speed' },
+                    { id: 'dexterity', label: 'Dexterity' }
+                  ].map(stat => (
+                    <div
+                      key={stat.id}
+                      className={`rounded-xl border transition-all duration-200 overflow-hidden flex flex-col ${
+                        selectedStat === stat.id 
+                          ? 'bg-indigo-500/10 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.1)]' 
+                          : 'bg-zinc-950 border-white/5 hover:border-white/20'
+                      }`}
+                    >
+                      <button
+                        onClick={() => setSelectedStat(stat.id as any)}
+                        className={`w-full py-2 flex justify-center items-center font-black text-[10px] tracking-widest uppercase transition-colors ${
+                          selectedStat === stat.id ? 'bg-indigo-500/20 text-indigo-300' : 'text-zinc-500 hover:text-white'
+                        }`}
+                      >
+                        {stat.label}
+                      </button>
+                      <div className="p-2 pt-0 flex items-center bg-transparent">
+                        <input
+                          type="number"
+                          value={editableStats ? editableStats[stat.id] : (data.battlestats?.[stat.id] || 10)}
+                          onChange={(e) => {
+                            let val = Number(e.target.value);
+                            if (val < 0) val = 0;
+                            setEditableStats(prev => prev ? { ...prev, [stat.id]: val } : null);
+                          }}
+                          className={`w-full bg-black/40 rounded-lg p-2 text-center font-mono text-sm outline-none transition-colors ${
+                            selectedStat === stat.id ? 'text-indigo-200 focus:bg-indigo-900/40 focus:ring-1 focus:ring-indigo-500' : 'text-zinc-400 focus:bg-zinc-900 focus:ring-1 focus:ring-zinc-600'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="flex gap-4 w-full min-w-0 md:col-span-2 mt-2">
@@ -355,157 +355,18 @@ function ProfilePage() {
                   energyPerTrain={energyPerTrain}
                   statType={selectedStat}
                   naturalEnergyPerDay={(data.donator === 1) ? 720 : 480}
-                  onChange={(jump, cost, stacked, refill) => {
+                  onChange={(jump, cost, stacked, refill, config) => {
                     setCurrentJump(jump)
+                    setCurrentConfig(config)
                     setJumpCost(cost)
                     setIsStackedJump(stacked)
                     setJumpHasRefill(refill)
                   }}
                 />
               </div>
-            </div>
 
-            {/* Results */}
-            {simulationResult ? (
-              <div className="mt-4 p-6 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl flex flex-col gap-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full mix-blend-screen" />
-
-                <div className="flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
-                  <div className="flex flex-col items-center flex-1 w-full bg-black/40 p-6 rounded-xl border border-white/5">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase mb-2">Total Gain</span>
-                    <span className="text-4xl font-black font-mono text-emerald-400">
-                      +{Math.floor(simulationResult.totalStatGained).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center flex-1 w-full bg-black/40 p-6 rounded-xl border border-white/5">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase mb-2">Final Stat</span>
-                    <span className="text-4xl font-black font-mono text-indigo-300">
-                      {Math.floor(simulationResult.finalStat).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4 border-t border-white/5 pt-6 relative z-10">
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase">Energy Spent</span>
-                    <span className="text-sm font-mono text-white mt-1">{simulationResult.totalEnergySpent}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase">Happy Lost</span>
-                    <span className="text-sm font-mono text-yellow-400 mt-1">{simulationResult.totalHappyLost}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase">Multiplier</span>
-                    <span className="text-sm font-mono text-cyan-400 mt-1">x{(multipliers?.[selectedStat] || 1).toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {/* Custom Jump ROI */}
-                {jumpCost > 0 && (
-                  <div className="flex justify-between items-center pt-6 border-t border-white/5 relative z-10">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase">Custom Strategy Cost</span>
-                      <span className="font-mono text-yellow-500 text-lg">${(jumpCost / 1000000).toFixed(2)}M</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase">Cost per Stat</span>
-                      <span className="font-mono text-emerald-400 text-lg">${Math.floor(jumpCost / simulationResult.totalStatGained).toLocaleString()}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* 24h Extrapolation Box */}
-                {yield24h && (
-                  <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-xl flex flex-col gap-3 mt-2 relative z-10">
-                    <h3 className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest flex items-center gap-2">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      24h Extrapolation (Daily Yield)
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] text-indigo-400/70 font-bold uppercase">Estimated Daily Stat Gain</span>
-                        <span className="text-lg font-mono text-emerald-400 mt-1">+{Math.floor(yield24h.gain24h).toLocaleString()}</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[9px] text-indigo-400/70 font-bold uppercase">Estimated Daily Cost</span>
-                        <span className="text-lg font-mono text-rose-400 mt-1">
-                          {yield24h.cost24h > 0 ? `-$${(yield24h.cost24h / 1000000).toFixed(1)}m` : 'FREE'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ROI Analyzer Section */}
-                {roiAnalysis && (
-                  <div className="mt-2 border-t border-white/5 pt-6 relative z-10">
-                    <h3 className="text-[10px] text-zinc-500 font-bold uppercase mb-4 flex items-center gap-2">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      Happy Jump ROI Analyzer
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-                      {/* Normal Train */}
-                      <div className={`p-4 rounded-xl border flex flex-col gap-2 ${roiAnalysis.xanax.isBest ? 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-black/40 border-white/5'}`}>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase text-zinc-400">Normal (250E)</span>
-                          {roiAnalysis.xanax.isBest && <span className="text-[9px] bg-emerald-500 text-black px-1.5 py-0.5 rounded font-black">BEST ROI</span>}
-                        </div>
-                        <div className="flex flex-col mt-1">
-                          <span className="text-[10px] text-zinc-500 font-mono">Cost: ${(roiAnalysis.xanax.cost / 1000000).toFixed(1)}M</span>
-                          <span className="text-[10px] text-zinc-500 font-mono">Gain: +{Math.floor(roiAnalysis.xanax.gain).toLocaleString()}</span>
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-white/5 flex justify-between items-end">
-                          <span className="text-[9px] text-zinc-500 font-bold">COST / STAT</span>
-                          <span className={`text-sm font-black font-mono ${roiAnalysis.xanax.isBest ? 'text-emerald-400' : 'text-white'}`}>
-                            ${Math.floor(roiAnalysis.xanax.cps).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Choco Jump */}
-                      <div className={`p-4 rounded-xl border flex flex-col gap-2 ${roiAnalysis.choco.isBest ? 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-black/40 border-white/5'}`}>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase text-zinc-400">49 Choco (1000E)</span>
-                          {roiAnalysis.choco.isBest && <span className="text-[9px] bg-emerald-500 text-black px-1.5 py-0.5 rounded font-black">BEST ROI</span>}
-                        </div>
-                        <div className="flex flex-col mt-1">
-                          <span className="text-[10px] text-zinc-500 font-mono">Cost: ${(roiAnalysis.choco.cost / 1000000).toFixed(1)}M</span>
-                          <span className="text-[10px] text-zinc-500 font-mono">Gain: +{Math.floor(roiAnalysis.choco.gain).toLocaleString()}</span>
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-white/5 flex justify-between items-end">
-                          <span className="text-[9px] text-zinc-500 font-bold">COST / STAT</span>
-                          <span className={`text-sm font-black font-mono ${roiAnalysis.choco.isBest ? 'text-emerald-400' : 'text-white'}`}>
-                            ${Math.floor(roiAnalysis.choco.cps).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* eDVD Jump */}
-                      <div className={`p-4 rounded-xl border flex flex-col gap-2 ${roiAnalysis.edvd.isBest ? 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-black/40 border-white/5'}`}>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase text-zinc-400">5 eDVD (1000E)</span>
-                          {roiAnalysis.edvd.isBest && <span className="text-[9px] bg-emerald-500 text-black px-1.5 py-0.5 rounded font-black">BEST ROI</span>}
-                        </div>
-                        <div className="flex flex-col mt-1">
-                          <span className="text-[10px] text-zinc-500 font-mono">Cost: ${(roiAnalysis.edvd.cost / 1000000).toFixed(1)}M</span>
-                          <span className="text-[10px] text-zinc-500 font-mono">Gain: +{Math.floor(roiAnalysis.edvd.gain).toLocaleString()}</span>
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-white/5 flex justify-between items-end">
-                          <span className="text-[9px] text-zinc-500 font-bold">COST / STAT</span>
-                          <span className={`text-sm font-black font-mono ${roiAnalysis.edvd.isBest ? 'text-emerald-400' : 'text-white'}`}>
-                            ${Math.floor(roiAnalysis.edvd.cps).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
+            {/* Results placeholder */}
+            {!simulationResult && (
               <div className="mt-4 p-10 flex justify-center items-center bg-zinc-950 border border-white/5 rounded-2xl">
                 <span className="text-sm font-bold text-zinc-600">Select a valid Gym and Stat to simulate</span>
               </div>
@@ -513,8 +374,24 @@ function ProfilePage() {
           </div>
         </div>
 
+        {/* Timeline Container - Full Width */}
+        {currentConfig && (
+          <div className="mt-8">
+            <JumpTimeline 
+              config={currentConfig} 
+              maxEnergy={data?.energy?.maximum || 150}
+              naturalEnergyPerDay={(data.donator === 1) ? 720 : 480}
+              totalGain={simulationResult?.totalStatGained}
+              finalStat={simulationResult?.finalStat}
+              totalCost={jumpCost}
+              yield24h={yield24h}
+              statType={selectedStat}
+            />
+          </div>
+        )}
+
         {/* Perks Section */}
-        <div className="mt-8 bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-6">
+        <div className="mt-8 bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-6 w-full">
           <h2 className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.2em]">Active Perks & Modifiers</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
@@ -595,7 +472,8 @@ function ProfilePage() {
             </div>
 
           </div>
-          </div>
+        </div>
+        </div>
         </div>
       </main>
       

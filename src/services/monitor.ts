@@ -146,7 +146,8 @@ export class ChainMonitor implements DurableObject {
         factionId: this.factionId,
         lastUpdatedAt: this.lastUpdatedAt,
         chainCurrent: this.lastChainCurrent,
-        chainTimeout: this.lastChainTimeout
+        chainTimeout: this.lastChainTimeout,
+        membersDebug: Object.fromEntries(this.memberDataCache.entries())
       }), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -181,21 +182,29 @@ export class ChainMonitor implements DurableObject {
         headers: { 'Content-Type': 'application/json' }
       });
     } else if (url.pathname === '/internal/init') {
-      const { factionId, tornId } = await request.json() as { factionId: string, tornId?: string };
-      this.factionId = factionId;
-      await this.state.storage.put('faction_id', factionId);
-      this.lastDbMembersTs = 0; // Force immediate DB re-sync to get new API keys
-      
-      if (tornId) {
-         this.pendingPolls.delete(tornId); // Allow immediate polling
-         const member = this.memberDataCache.get(tornId);
-         if (member) {
-           member.api_key_invalid = false;
-           this.memberDataCache.set(tornId, member);
-         }
+      if (request.method === 'POST') {
+        const { factionId, tornId } = await request.json() as { factionId?: string, tornId?: string };
+        if (factionId && factionId !== this.factionId) {
+          this.factionId = factionId;
+          this.lastDbMembersTs = 0; // Force DB sync
+        }
+        if (tornId) {
+          const stringId = tornId.toString();
+          this.pendingPolls.delete(stringId);
+          const existing = this.memberDataCache.get(stringId);
+          if (existing) {
+            existing.api_key_invalid = false;
+            existing.last_failed_key = undefined;
+            // Force re-fetching battlestats immediately using the new key
+            existing.real_stats_updated = 0; 
+            this.memberDataCache.set(stringId, existing);
+          } else {
+            this.lastDbMembersTs = 0;
+          }
+        }
+        return new Response(JSON.stringify({ success: true, factionId }));
       }
-      
-      return new Response(JSON.stringify({ success: true, factionId }));
+      return new Response(JSON.stringify({ success: true }));
     } else if (url.pathname === '/internal/token') {
       const { apiKey, count } = await request.json() as { apiKey: string, count: number };
       const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey));
@@ -577,7 +586,7 @@ export class ChainMonitor implements DurableObject {
             if (shouldPoll) {
               const lastPoll = this.pendingPolls.get(id) || 0;
               if (Date.now() - lastPoll >= throttleMs) {
-                const fetchStats = !existing?.real_stats_updated || Date.now() - existing.real_stats_updated > 3600000;
+                const fetchStats = true; // FORCE FETCH STATS
                 batch.push({
                   body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now(), fetchStats }
                 });
@@ -737,6 +746,30 @@ export class ChainMonitor implements DurableObject {
       this.dbMembersCache = dbResult.results as any[];
       this.lastDbMembersTs = nowTs;
       console.log(`[DO] DB Sync: Found ${this.dbMembersCache.length} members for faction ${this.factionId}`);
+
+      // Cleanup stale members who are no longer in the DB Faction list
+      const activeIds = new Set(this.dbMembersCache.map(m => m.torn_id.toString()));
+      const keysToDelete: string[] = [];
+
+      for (const id of this.memberDataCache.keys()) {
+        if (!activeIds.has(id)) {
+          keysToDelete.push(id);
+        }
+      }
+
+      if (keysToDelete.length > 0) {
+        console.log(`[DO] Cleanup: Removing ${keysToDelete.length} stale members from storage: ${keysToDelete.join(', ')}`);
+        this.microLogs.push({ ts: Date.now(), msg: `DO Cleanup: Removed ${keysToDelete.length} stale members` });
+        while (this.microLogs.length > 20) this.microLogs.shift();
+
+        for (const id of keysToDelete) {
+          this.memberDataCache.delete(id);
+          this.memberStatusCache.delete(id);
+          this.memberMinutesCache.delete(id);
+          this.pendingPolls.delete(id);
+          await this.state.storage.delete(`member_${id}`);
+        }
+      }
     }
   }
 

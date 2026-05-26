@@ -7,7 +7,7 @@
 
 我們需要一個timeline的東西橫向的, 去展示一天的0h-24h 的狀態, user 可以拖動他選擇的item, 我們選擇item 就會自動出現在上, 然後我們可以拖動去time block,這樣就可以清楚顯示24小时可以做多少次training, 或者說一個block多大的training, 也可能一次標準的4xanax 需要兩天, 所以這個timeline要自適應的調整大小,如果兩天就顯示兩排, user 可以在上面設定睡眠時間去卡位, 我們也有自動按鈕去排版, 每一種preset 都可以auto的在上面顯示, 同時可以展示他的cooldown時常什麽時候開始到什麽時候結束 等等, 用timeline的形式展現
 
-
+battle stat 移除, 把數據直接放到target stat 裏面, 然後是可以更改數字的, 預設就是個人的數據, 有一個reset button 可以恢復個人的數據, 如果用戶修改數據就用用戶修改的數據做計算
 
 我們需要：
 1. gym room 的數值

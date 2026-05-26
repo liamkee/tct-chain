@@ -13,6 +13,7 @@ export interface JumpConfig {
     tootsie: number;
     lollipop: number;
     ecstasy: number; // 0 or 1
+    sleepHours?: number; // Optional sleep duration for timeline
   };
 }
 

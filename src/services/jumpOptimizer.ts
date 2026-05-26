@@ -26,59 +26,41 @@ export interface OptimalPreset {
 }
 
 export function generateOptimalPresets(params: OptimizerParams): OptimalPreset[] {
-  // We need to evaluate various permutations of items.
-  // Permutation limits:
-  // Xanax: 0..4
-  // eDVD: 0..4 (Wait, 5 if we don't care about the 24h limit? No, 5 eDVDs is 30h without faction perks, but if they have perks, it's less. Let's just allow 0..5 eDVDs)
-  // FHC: 0..4 (Since FHC is 6h booster cd)
-  // Truffles, Tootsie, Lollipop (we'll simplify: just test 49 truffles, 96 lollipops, etc.)
-  // Ecstasy: 0..1
-  // Refill: 0..1
-  
-  const presets: JumpConfig['items'][] = [
-    // Zero cost baseline
-    { xanax: 0, edvd: 0, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 0 },
-    
-    // Normal 1 Xanax
-    { xanax: 1, edvd: 0, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 0 },
-    
-    // 99k eDVD Jump (4 Xanax + 5 eDVD + Ecstasy + Refill)
-    { xanax: 4, edvd: 5, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 1, refill: 1 },
-    { xanax: 4, edvd: 4, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 1, refill: 1 },
-    
-    // Choco Jump (4 Xanax + 49 Truffles + Ecstasy + Refill)
-    { xanax: 4, edvd: 0, truffles: 49, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 1, refill: 1 },
-    { xanax: 4, edvd: 0, truffles: 48, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 1, refill: 1 },
-    
-    // Lollipop Jump (4 Xanax + 96 Lollipops + Ecstasy + Refill)
-    { xanax: 4, edvd: 0, truffles: 0, tootsie: 0, lollipop: 96, fhc: 0, ecstasy: 1, refill: 1 },
-    
-    // Full FHC Jump (4 Xanax + 4 FHC + Ecstasy + Refill) -> FHC replaces eDVDs for Booster CD
-    { xanax: 4, edvd: 0, truffles: 0, tootsie: 0, lollipop: 0, fhc: 4, ecstasy: 1, refill: 1 },
-    { xanax: 4, edvd: 0, truffles: 0, tootsie: 0, lollipop: 0, fhc: 5, ecstasy: 1, refill: 1 },
-
-    // Drug-Free E-DVD Jump (No Xanax, No Ecstasy, 4 eDVDs + Refill)
-    { xanax: 0, edvd: 4, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 1 },
-    { xanax: 0, edvd: 5, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 1 },
-
-    // Drug-Free Choco Jump
-    { xanax: 0, edvd: 0, truffles: 49, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 1 },
-    
-    // Drug-Free FHC Jump
-    { xanax: 0, edvd: 0, truffles: 0, tootsie: 0, lollipop: 0, fhc: 4, ecstasy: 0, refill: 1 },
-
-    // Fast-train jumps (Time efficiency)
-    { xanax: 4, edvd: 0, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 1 },
-    { xanax: 1, edvd: 0, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 1 }
+  const predefinedJumps = [
+    {
+      id: 'jump_standard',
+      label: 'eDVD Happy Jump (4x Xanax + 5x eDVD + Ecstasy)',
+      config: { xanax: 4, edvd: 5, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 1, refill: 1 }
+    },
+    {
+      id: 'jump_choco',
+      label: 'Choco Jump (4x Xanax + 49x truffles + Ecstasy)',
+      config: { xanax: 4, edvd: 0, truffles: 49, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 1, refill: 1 }
+    },
+    {
+      id: 'jump_daily_routine_extra',
+      label: 'Daily Routine Extra (3x Xanax + 1x Refill + 49x Choco)',
+      config: { xanax: 3, edvd: 0, truffles: 49, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 1, sleepHours: 8 }
+    },
+    {
+      id: 'jump_fhc',
+      label: 'FHC Jump (4x Xanax + 5x FHC + Ecstasy)',
+      config: { xanax: 4, edvd: 0, truffles: 0, tootsie: 0, lollipop: 0, fhc: 5, ecstasy: 1, refill: 1 }
+    },
+    {
+      id: 'jump_drug_free_edvd',
+      label: 'Drug-Free Happy Jump (5x eDVD)',
+      config: { xanax: 0, edvd: 5, truffles: 0, tootsie: 0, lollipop: 0, fhc: 0, ecstasy: 0, refill: 1 }
+    }
   ];
 
-  const results = presets.map(config => {
+  return predefinedJumps.map(preset => {
     // 1. Calculate jump totals
     const jump = calculateJump({
       baseEnergy: params.baseEnergy,
       baseHappy: params.baseHappy,
       maxEnergy: params.maxEnergy,
-      items: config
+      items: preset.config
     });
 
     // 2. Calculate stat gain sequentially (Stacked -> FHC -> Refill)
@@ -89,122 +71,62 @@ export function generateOptimalPresets(params: OptimizerParams): OptimalPreset[]
       params.currentStat,
       params.gymDots,
       params.energyPerTrain,
-      params.perkMultiplier
+      params.perkMultiplier,
+      preset.config,
+      params.baseHappy
     );
 
     // 3. Calculate Cost
-    const totalCost = 
-      (config.xanax * ITEM_PRICES.XANAX) +
-      (config.edvd * ITEM_PRICES.EDVD) +
-      (config.truffles * ITEM_PRICES.TRUFFLES) +
-      (config.tootsie * ITEM_PRICES.TOOTSIE) +
-      (config.lollipop * ITEM_PRICES.LOLLIPOP) +
-      (config.fhc * ITEM_PRICES.FHC) +
-      (config.ecstasy * ITEM_PRICES.ECSTASY) +
-      (config.refill * ITEM_PRICES.POINT * 25);
+    const totalCost =
+      (preset.config.xanax * ITEM_PRICES.XANAX) +
+      (preset.config.edvd * ITEM_PRICES.EDVD) +
+      (preset.config.truffles * ITEM_PRICES.TRUFFLES) +
+      (preset.config.tootsie * ITEM_PRICES.TOOTSIE) +
+      (preset.config.lollipop * ITEM_PRICES.LOLLIPOP) +
+      (preset.config.fhc * ITEM_PRICES.FHC) +
+      (preset.config.ecstasy * ITEM_PRICES.ECSTASY) +
+      (preset.config.refill * ITEM_PRICES.POINT * 25);
 
     // 4. Calculate Time
     const totalTimeMins = jump.prepTimeMins + jump.totalDrugCdMins + jump.totalBoosterCdMins;
-    
+
     // 5. Calculate 24h Yield
-    const isStackedJump = config.xanax > 1; // Stacking Xanax > 1 wastes natural energy
-    const hasRefill = config.refill > 0;
-    const { gain24h, cost24h } = calculate24hYield(
-      trainResult.totalStatGained,
-      totalCost,
-      totalTimeMins,
-      isStackedJump,
-      hasRefill,
-      params.baseHappy,
-      params.statType,
-      params.currentStat,
-      params.gymDots,
-      params.energyPerTrain,
-      params.perkMultiplier,
-      params.naturalEnergyPerDay
-    );
+    let gain24h, cost24h;
+    if (preset.id === 'jump_daily_routine_extra') {
+      gain24h = trainResult.totalStatGained;
+      cost24h = totalCost;
+    } else {
+      const isStackedJump = preset.config.xanax > 1; // Stacking Xanax wastes natural energy
+      const hasRefill = preset.config.refill > 0;
+      const yieldRes = calculate24hYield(
+        trainResult.totalStatGained,
+        totalCost,
+        totalTimeMins,
+        isStackedJump,
+        hasRefill,
+        params.baseHappy,
+        params.statType,
+        params.currentStat,
+        params.gymDots,
+        params.energyPerTrain,
+        params.perkMultiplier,
+        params.naturalEnergyPerDay
+      );
+      gain24h = yieldRes.gain24h;
+      cost24h = yieldRes.cost24h;
+    }
 
     return {
-      config,
+      id: preset.id,
+      label: preset.label,
+      config: preset.config,
       statGain: trainResult.totalStatGained,
       cost: totalCost,
       timeMins: totalTimeMins,
       gain24h,
-      cost24h,
-      isValid: jump.totalBoosterCdMins <= 1440
+      cost24h
     };
   });
-
-  // Filter out invalid jumps (booster CD > 24h) unless the user has faction perks that make 5 eDVDs < 24h.
-  // Actually, calculateJump currently just sums the base cooldowns. If they exceed 1440, it's flagged as isBoosterCdExceeded.
-  // Wait, in calculateJump we just sum base cooldowns. Faction perks aren't passed into JumpBuilder.
-  // So a 5 eDVD jump (1800m base) will ALWAYS be invalid here.
-  // To allow it, we should just let them all through and let the user decide, OR filter by 1440.
-  // For safety, let's keep all valid combinations (some might exceed base 1440 but users do it anyway with perks).
-  // But let's severely penalize time efficiency if it exceeds 1440.
-  
-  const candidates = results.filter(r => r.cost > 0); // Ignore zero-cost
-
-  // 1. Max Stat Gain
-  const maxStat = [...candidates].sort((a, b) => b.statGain - a.statGain)[0];
-  
-  // 2. Most Economical (Stat per $)
-  const economical = [...candidates].sort((a, b) => (b.statGain / b.cost) - (a.statGain / a.cost))[0];
-
-  // 3. Max Stat Gain (Daily)
-  const maxDaily = [...candidates].sort((a, b) => b.gain24h - a.gain24h)[0];
-
-  // 4. Best Drug-Free (No Xanax, No Ecstasy)
-  const drugFreeCandidates = candidates.filter(r => r.config.xanax === 0 && r.config.ecstasy === 0);
-  const drugFree = drugFreeCandidates.sort((a, b) => b.statGain - a.statGain)[0];
-
-  const presetsList: OptimalPreset[] = [];
-
-  if (maxStat) presetsList.push({
-    id: 'max_stat',
-    label: `Max Stat Gain (+${Math.round(maxStat.statGain).toLocaleString()} stat)`,
-    config: maxStat.config,
-    statGain: maxStat.statGain,
-    cost: maxStat.cost,
-    timeMins: maxStat.timeMins,
-    gain24h: maxStat.gain24h,
-    cost24h: maxStat.cost24h
-  });
-
-  if (maxDaily && maxDaily !== maxStat) presetsList.push({
-    id: 'max_daily',
-    label: `Max Stat Gain (Daily) (+${Math.round(maxDaily.gain24h).toLocaleString()} stat / day)`,
-    config: maxDaily.config,
-    statGain: maxDaily.statGain,
-    cost: maxDaily.cost,
-    timeMins: maxDaily.timeMins,
-    gain24h: maxDaily.gain24h,
-    cost24h: maxDaily.cost24h
-  });
-
-  if (economical && economical !== maxStat && economical !== maxDaily) presetsList.push({
-    id: 'economical',
-    label: `Most Economical (+${Math.round(economical.statGain).toLocaleString()} stat / $${(economical.cost/1000000).toFixed(1)}m)`,
-    config: economical.config,
-    statGain: economical.statGain,
-    cost: economical.cost,
-    timeMins: economical.timeMins,
-    gain24h: economical.gain24h,
-    cost24h: economical.cost24h
-  });
-
-  if (drugFree) presetsList.push({
-    id: 'drug_free',
-    label: `Drug-Free Jump (+${Math.round(drugFree.statGain).toLocaleString()} stat)`,
-    config: drugFree.config,
-    statGain: drugFree.statGain,
-    cost: drugFree.cost,
-    timeMins: drugFree.timeMins,
-    gain24h: drugFree.gain24h,
-    cost24h: drugFree.cost24h
-  });
-
-  return presetsList;
 }
 
 export function calculate24hYield(
@@ -244,7 +166,7 @@ export function calculate24hYield(
   }
 
   const cyclesPerDay = 1440 / effectiveTime;
-  
+
   let total24hGain = jumpStatGain * cyclesPerDay;
   let total24hCost = jumpCost * cyclesPerDay;
 
@@ -263,8 +185,43 @@ export function calculateJumpStatGain(
   currentStat: number,
   gymDots: number,
   energyPerTrain: number,
-  perkMultiplier: number
+  perkMultiplier: number,
+  config?: JumpConfig['items'],
+  baseHappy?: number
 ) {
+  const isDailyRoutine = config && config.xanax === 3 && config.refill === 1;
+
+  if (isDailyRoutine) {
+    const activeBaseHappy = baseHappy ?? 4000;
+    const peakHappy = jump.peakHappy;
+    let statVal = currentStat;
+    let currentHappy = peakHappy;
+    
+    // A. Wake-up Jump Train: 400E (150E natural + 250E Xanax #1) trained at peak happy
+    const resJump = calculateBatchTrain(statType, statVal, currentHappy, 400, gymDots, energyPerTrain, perkMultiplier);
+    currentHappy = resJump.finalHappy;
+    statVal = resJump.finalStat;
+    
+    // B. Refill Train: 250E trained right after jump train at remaining happy
+    const resRefill = calculateBatchTrain(statType, statVal, currentHappy, maxEnergy, gymDots, energyPerTrain, perkMultiplier);
+    currentHappy = resRefill.finalHappy;
+    statVal = resRefill.finalStat;
+    
+    // C. Other 2 Xanax: 2 * 250E = 500E trained at base happy
+    const resXanaxOther = calculateBatchTrain(statType, statVal, activeBaseHappy, 500, gymDots, energyPerTrain, perkMultiplier);
+    statVal = resXanaxOther.finalStat;
+    
+    // D. Other 3 natural cycles: 3 * 150E = 450E trained at base happy
+    const resNaturalOther = calculateBatchTrain(statType, statVal, activeBaseHappy, 450, gymDots, energyPerTrain, perkMultiplier);
+    statVal = resNaturalOther.finalStat;
+    
+    return {
+      totalStatGained: statVal - currentStat,
+      finalStat: statVal,
+      finalHappy: resNaturalOther.finalHappy
+    };
+  }
+
   let totalStatGained = 0;
   let currentHappy = jump.peakHappy;
   let statVal = currentStat;

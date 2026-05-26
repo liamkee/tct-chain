@@ -53,6 +53,14 @@ app.all('/ws', async (c) => {
   }
 })
 
+// Debug Route
+app.get('/api/debug', async (c) => {
+    const factionId = c.env.FACTION_ID || '53822';
+    const id = c.env.CHAIN_MONITOR.idFromName(factionId.toString())
+    const stub = c.env.CHAIN_MONITOR.get(id)
+    return stub.fetch(new Request('http://do/status'));
+})
+
 // SPA fallback in production
 app.get('*', async (c, next) => {
   if (c.env?.ASSETS) {

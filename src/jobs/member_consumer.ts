@@ -152,9 +152,11 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
           );
           updates.real_stats = real_stats;
           updates.real_stats_updated = Date.now();
+          console.log(`[Queue] 📊 Parsed real_stats for ${tornId}: ${real_stats} (strength=${data.strength}, mod=${data.strength_modifier})`);
         } else if (fetchStats) {
           // Mark it as updated so we don't try again for 24h if it was denied (Code 16)
           updates.real_stats_updated = Date.now();
+          console.log(`[Queue] ⚠️ Stats requested for ${tornId} but 'strength' is undefined. Response keys: ${Object.keys(data).join(',')}`);
         }
 
         updatesBatch.push({
