@@ -1,5 +1,14 @@
 我要做一個預測gym formula 的東西
 
+我要做一個新的happy jump stratery的使用和顯示
+我們可以選擇我們要用的item 是什麽, 當用戶選擇了,我們就要幫它計算合理的方式, 比如cooldown能不能接受他的這個模式, 我們要自動去計算他的item 的數量, 它可以調整item 的數量,我們就要一并去調整它的物品所產生的cooldown是否合理
+計算增加的happy
+計算他的jump的方式需要至少花費多少時間
+
+我們需要一個timeline的東西橫向的, 去展示一天的0h-24h 的狀態, user 可以拖動他選擇的item, 我們選擇item 就會自動出現在上, 然後我們可以拖動去time block,這樣就可以清楚顯示24小时可以做多少次training, 或者說一個block多大的training, 也可能一次標準的4xanax 需要兩天, 所以這個timeline要自適應的調整大小,如果兩天就顯示兩排, user 可以在上面設定睡眠時間去卡位, 我們也有自動按鈕去排版, 每一種preset 都可以auto的在上面顯示, 同時可以展示他的cooldown時常什麽時候開始到什麽時候結束 等等, 用timeline的形式展現
+
+
+
 我們需要：
 1. gym room 的數值
    - 數據已整理在 `data/gym_data.json` 中。

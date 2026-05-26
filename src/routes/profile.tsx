@@ -1,9 +1,13 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { calculateBatchTrain } from '../services/gymEngine'
+import { calculate24hYield, calculateJumpStatGain } from '../services/jumpOptimizer'
+import { calculateJump } from '../services/jumpCalculator'
 import type { TrainResult, BatchTrainResult } from '../services/gymEngine'
 import { calculateGymModifiersFromPerks } from '../utils/gymPerksParser'
 import { ITEM_PRICES } from '../constants/items'
+import { CustomSelect } from '../components/CustomSelect'
+import { JumpBuilder } from '../components/JumpBuilder'
 import gymData from '../../data/gym_data.json'
 
 export const Route = createFileRoute('/profile')({
@@ -24,9 +28,13 @@ function ProfilePage() {
   useEffect(() => {
     localStorage.setItem('tct_selected_gym', selectedGymId);
   }, [selectedGymId]);
-  const [trainEnergy, setTrainEnergy] = useState<number>(150)
-  const [jumpHappy, setJumpHappy] = useState<number>(0)
-  const [jumpType, setJumpType] = useState<string>('normal')
+  const [currentJump, setCurrentJump] = useState<any>(null)
+  const [jumpCost, setJumpCost] = useState<number>(0)
+  const [isStackedJump, setIsStackedJump] = useState<boolean>(false)
+  const [jumpHasRefill, setJumpHasRefill] = useState<boolean>(false)
+
+  const [baseEnergy, setBaseEnergy] = useState<number>(150)
+  const [baseHappy, setBaseHappy] = useState<number>(4000)
 
   // Live Cooldown States
   const [boosterCd, setBoosterCd] = useState<number>(0)
@@ -46,8 +54,8 @@ function ProfilePage() {
       .then((res: any) => {
         if (res.error) throw new Error(res.error)
         setData(res.data)
-        setJumpHappy(res.data.happy?.maximum || 4025)
-        setTrainEnergy(res.data.energy?.current || 150)
+        setBaseHappy(res.data.happy?.maximum || 4025)
+        setBaseEnergy(res.data.energy?.current || 150)
         setBoosterCd(res.data.cooldowns?.booster || 0)
         setDrugCd(res.data.cooldowns?.drug || 0)
         setLoading(false)
@@ -98,7 +106,7 @@ function ProfilePage() {
   };
 
   const simulationResult = useMemo(() => {
-    if (!data || !multipliers) return null
+    if (!data || !multipliers || !currentJump) return null
     const gym = gymData.gyms.find((g: any) => g.id === String(selectedGymId) || g.id === Number(selectedGymId))
     if (!gym) return null
 
@@ -107,29 +115,53 @@ function ProfilePage() {
     if (gymDots === 0) return null
 
     const perkMult = multipliers[selectedStat]
-
-    let initialHappy = jumpHappy;
-    let energyToUse = trainEnergy;
-
-    if (jumpType === 'choco') {
-      initialHappy = (jumpHappy + 4900) * 2;
-      energyToUse = 1000;
-    } else if (jumpType === 'edvd') {
-      initialHappy = (jumpHappy + 12500) * 2;
-      energyToUse = 1000;
-    }
     const energyPerTrain = gym.energy_per_train || 5;
 
-    return calculateBatchTrain(
+    const res = calculateJumpStatGain(
+      currentJump,
+      data.energy?.maximum || 150,
       selectedStat,
       currentStatVal,
-      initialHappy,
-      energyToUse,
       gymDots,
       energyPerTrain,
       perkMult
-    )
-  }, [data, multipliers, selectedGymId, selectedStat, jumpHappy, trainEnergy, jumpType])
+    );
+
+    return {
+      ...res,
+      totalEnergySpent: currentJump.totalEnergy,
+      totalHappyLost: currentJump.peakHappy - res.finalHappy
+    };
+  }, [data, multipliers, selectedGymId, selectedStat, currentJump])
+
+  const yield24h = useMemo(() => {
+    if (!simulationResult || !data || !multipliers) return null;
+    const activeGym = gymData.gyms.find((g: any) => g.id === String(selectedGymId) || g.id === Number(selectedGymId));
+    if (!activeGym) return null;
+
+    const currentStatVal = data.battlestats?.[selectedStat] as number || 10;
+    const gymDots = activeGym.multipliers?.[selectedStat] || 0;
+    const perkMult = multipliers[selectedStat] || 1;
+    const energyPerTrain = activeGym.energy_per_train || 10;
+    const naturalEnergyPerDay = (data.donator === 1) ? 720 : 480;
+
+    const timeMins = currentJump.prepTimeMins + currentJump.totalDrugCdMins + currentJump.totalBoosterCdMins;
+
+    return calculate24hYield(
+      simulationResult.totalStatGained,
+      jumpCost,
+      timeMins,
+      isStackedJump,
+      jumpHasRefill,
+      baseHappy,
+      selectedStat,
+      currentStatVal,
+      gymDots,
+      energyPerTrain,
+      perkMult,
+      naturalEnergyPerDay
+    );
+  }, [simulationResult, data, multipliers, selectedGymId, selectedStat, jumpCost, currentJump, isStackedJump, jumpHasRefill, baseHappy]);
 
   const roiAnalysis = useMemo(() => {
     if (!data || !multipliers) return null
@@ -178,6 +210,12 @@ function ProfilePage() {
   if (loading) return <div className="min-h-screen bg-black text-white p-10">Loading Profile...</div>
   if (error) return <div className="min-h-screen bg-black text-red-500 p-10">Error: {error}</div>
   if (!data) return null
+
+  const activeGym = gymData.gyms.find((g: any) => g.id === String(selectedGymId) || g.id === Number(selectedGymId));
+  const currentStatVal = data.battlestats?.[selectedStat] as number || 10;
+  const gymDots = activeGym?.multipliers?.[selectedStat] || 0;
+  const perkMult = multipliers?.[selectedStat] || 1;
+  const energyPerTrain = activeGym?.energy_per_train || 10;
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 flex flex-col font-sans relative overflow-hidden">
@@ -254,66 +292,76 @@ function ProfilePage() {
 
             {/* Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
+              
+              {/* Target Stat - 4 Blocks */}
+              <div className="flex flex-col gap-2 md:col-span-2">
                 <label className="text-[10px] text-zinc-400 font-bold uppercase">Target Stat</label>
-                <select
-                  className="bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono focus:border-indigo-500 outline-none"
-                  value={selectedStat}
-                  onChange={e => setSelectedStat(e.target.value as any)}
-                >
-                  <option value="strength">Strength</option>
-                  <option value="speed">Speed</option>
-                  <option value="defense">Defense</option>
-                  <option value="dexterity">Dexterity</option>
-                </select>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {[
+                    { id: 'strength', label: 'Strength' },
+                    { id: 'speed', label: 'Speed' },
+                    { id: 'defense', label: 'Defense' },
+                    { id: 'dexterity', label: 'Dexterity' }
+                  ].map(stat => (
+                    <button
+                      key={stat.id}
+                      onClick={() => setSelectedStat(stat.id as any)}
+                      className={`p-3 rounded-xl border font-black text-sm tracking-widest transition-all duration-200 flex justify-center items-center ${
+                        selectedStat === stat.id 
+                          ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
+                          : 'bg-zinc-950 border-white/5 text-zinc-500 hover:border-white/20 hover:text-white'
+                      }`}
+                    >
+                      {stat.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">
                 <label className="text-[10px] text-zinc-400 font-bold uppercase">Gym</label>
-                <select
-                  className="bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono focus:border-indigo-500 outline-none"
+                <CustomSelect
                   value={selectedGymId}
-                  onChange={e => setSelectedGymId(e.target.value)}
-                >
-                  {gymData.gyms.map((g: any) => (
-                    <option key={g.id} value={g.id}>{g.name} ({g.energy_per_train}E)</option>
-                  ))}
-                </select>
+                  onChange={setSelectedGymId}
+                  groups={[
+                    { label: '--- Lightweight Gyms ---', options: gymData.gyms.slice(0, 8).map((g: any) => ({ value: g.id, label: `${g.name} (${g.energy_per_train}E)` })) },
+                    { label: '--- Middleweight Gyms ---', options: gymData.gyms.slice(8, 16).map((g: any) => ({ value: g.id, label: `${g.name} (${g.energy_per_train}E)` })) },
+                    { label: '--- Heavyweight Gyms ---', options: gymData.gyms.slice(16, 24).map((g: any) => ({ value: g.id, label: `${g.name} (${g.energy_per_train}E)` })) },
+                    { label: '--- Specialist Gyms ---', options: gymData.gyms.slice(24, 31).map((g: any) => ({ value: g.id, label: `${g.name} (${g.energy_per_train}E)` })) },
+                    { label: '--- Other Gyms ---', options: gymData.gyms.slice(31).map((g: any) => ({ value: g.id, label: `${g.name} (${g.energy_per_train}E)` })) }
+                  ]}
+                />
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] text-zinc-400 font-bold uppercase">Jump Strategy</label>
-                <select
-                  className="bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono focus:border-indigo-500 outline-none"
-                  value={jumpType}
-                  onChange={e => {
-                    const newType = e.target.value;
-                    setJumpType(newType);
-
-                    if (newType === 'edvd' || newType === 'choco') {
-                       setTrainEnergy(1000);
-                       setJumpHappy(data?.happy?.maximum || 4025);
-                    } else {
-                       setTrainEnergy(data?.energy?.current || 0);
-                       setJumpHappy(data?.happy?.current || 0);
-                    }
-                  }}
-                >
-                  <option value="normal">Normal Train (Current Happy/Energy)</option>
-                  <option value="choco">Choco Jump (49x Choco + 4x Xanax)</option>
-                  <option value="edvd">5 eDVD Jump (5x eDVD + Ecstasy + 4x Xanax)</option>
-                </select>
-              </div>
-
-              <div className="flex gap-4 w-full min-w-0">
+              <div className="flex gap-4 w-full min-w-0 md:col-span-2 mt-2">
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Energy</label>
-                  <input type="number" className="w-full min-w-0 bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={trainEnergy} onChange={e => setTrainEnergy(Number(e.target.value))} />
+                  <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Base Energy</label>
+                  <input type="number" step="5" className="w-full min-w-0 bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={baseEnergy} onChange={e => setBaseEnergy(Number(e.target.value))} />
                 </div>
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
                   <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Base Happy</label>
-                  <input type="number" className="w-full min-w-0 bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={jumpHappy} onChange={e => setJumpHappy(Number(e.target.value))} />
+                  <input type="number" className="w-full min-w-0 bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={baseHappy} onChange={e => setBaseHappy(Number(e.target.value))} />
                 </div>
+              </div>
+
+              <div className="flex flex-col gap-2 md:col-span-2">
+                <JumpBuilder
+                  baseEnergy={baseEnergy}
+                  baseHappy={baseHappy}
+                  maxEnergy={data?.energy?.maximum || 150}
+                  currentStat={currentStatVal}
+                  gymMultiplier={perkMult}
+                  gymDots={gymDots}
+                  energyPerTrain={energyPerTrain}
+                  statType={selectedStat}
+                  naturalEnergyPerDay={(data.donator === 1) ? 720 : 480}
+                  onChange={(jump, cost, stacked, refill) => {
+                    setCurrentJump(jump)
+                    setJumpCost(cost)
+                    setIsStackedJump(stacked)
+                    setJumpHasRefill(refill)
+                  }}
+                />
               </div>
             </div>
 
@@ -351,6 +399,44 @@ function ProfilePage() {
                     <span className="text-sm font-mono text-cyan-400 mt-1">x{(multipliers?.[selectedStat] || 1).toFixed(2)}</span>
                   </div>
                 </div>
+
+                {/* Custom Jump ROI */}
+                {jumpCost > 0 && (
+                  <div className="flex justify-between items-center pt-6 border-t border-white/5 relative z-10">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase">Custom Strategy Cost</span>
+                      <span className="font-mono text-yellow-500 text-lg">${(jumpCost / 1000000).toFixed(2)}M</span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase">Cost per Stat</span>
+                      <span className="font-mono text-emerald-400 text-lg">${Math.floor(jumpCost / simulationResult.totalStatGained).toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 24h Extrapolation Box */}
+                {yield24h && (
+                  <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-xl flex flex-col gap-3 mt-2 relative z-10">
+                    <h3 className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest flex items-center gap-2">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      24h Extrapolation (Daily Yield)
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] text-indigo-400/70 font-bold uppercase">Estimated Daily Stat Gain</span>
+                        <span className="text-lg font-mono text-emerald-400 mt-1">+{Math.floor(yield24h.gain24h).toLocaleString()}</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[9px] text-indigo-400/70 font-bold uppercase">Estimated Daily Cost</span>
+                        <span className="text-lg font-mono text-rose-400 mt-1">
+                          {yield24h.cost24h > 0 ? `-$${(yield24h.cost24h / 1000000).toFixed(1)}m` : 'FREE'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* ROI Analyzer Section */}
                 {roiAnalysis && (

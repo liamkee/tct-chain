@@ -39,6 +39,44 @@ profile.get('/gym-data', async (c) => {
       return c.json({ error: data.error.error || 'Torn API Error' }, 400)
     }
 
+    // Sync back to the DO so the chain engine gets the freshest stats instantly!
+    const factionId = data.faction?.faction_id;
+    if (factionId && c.env.CHAIN_MONITOR) {
+      try {
+        const id = c.env.CHAIN_MONITOR.idFromName(factionId.toString());
+        const monitor = c.env.CHAIN_MONITOR.get(id);
+        const isDonator = (data.energy?.maximum || 100) > 100;
+        
+        const real_stats = Math.floor(
+          (data.strength || 0) * (1 + (data.strength_modifier || 0) / 100) +
+          (data.defense || 0) * (1 + (data.defense_modifier || 0) / 100) +
+          (data.speed || 0) * (1 + (data.speed_modifier || 0) / 100) +
+          (data.dexterity || 0) * (1 + (data.dexterity_modifier || 0) / 100)
+        );
+
+        // DO URL uses http://do/internal/update-members-batch
+        await monitor.fetch('http://do/internal/update-members-batch', {
+          method: 'POST',
+          body: JSON.stringify([{
+            id: payload.torn_id.toString(),
+            updates: {
+              name: data.name,
+              energy: data.energy?.current,
+              energy_max: data.energy?.maximum || (isDonator ? 150 : 100),
+              cooldowns: data.cooldowns,
+              refill_used: data.refills ? !!data.refills.energy_refill_used : false,
+              last_updated: Math.floor(Date.now() / 1000),
+              api_key_invalid: false,
+              real_stats: real_stats,
+              real_stats_updated: Date.now()
+            }
+          }])
+        });
+      } catch (err) {
+        console.error('[Profile API] Failed to sync latest stats to DO:', err);
+      }
+    }
+
     return c.json({
       success: true,
       data: {
