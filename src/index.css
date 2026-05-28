@@ -43,6 +43,19 @@
   input[type=number] {
     -moz-appearance: textfield;
   }
+
+  /* Ensure all interactive elements have pointer cursor */
+  button,
+  a,
+  select,
+  input[type="submit"],
+  input[type="button"],
+  input[type="checkbox"],
+  input[type="radio"],
+  [role="button"],
+  .cursor-pointer {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {

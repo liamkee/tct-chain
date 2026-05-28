@@ -70,11 +70,15 @@ const customDynamicModifier: Modifier = (args) => {
 function DraggableBlock({ 
   block,
   actionIndex = 0,
-  totalActions = 1
+  totalActions = 1,
+  trackIndex = 0,
+  totalTracks = 3
 }: { 
   block: TimelineBlockData;
   actionIndex?: number;
   totalActions?: number;
+  trackIndex?: number;
+  totalTracks?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: block.id,
@@ -90,11 +94,8 @@ function DraggableBlock({
   const isSleep = block.type === 'sleep';
   const isNatural = block.type === 'natural';
 
-  const trackTop = 
-    block.type === 'sleep' ? '4px' :
-    block.type === 'drug' ? '4px' :
-    block.type === 'natural' ? '60px' :
-    block.type === 'booster' ? '32px' : '4px';
+  const trackTop = `${trackIndex * 28 + 4}px`;
+  const trackHeight = `${totalTracks * 28}px`;
 
   const baseWidth = block.offsetMins !== null ? (block.durationMins / 15) * 10 : 0;
   const currentWidth = baseWidth + resizeDelta;
@@ -103,10 +104,10 @@ function DraggableBlock({
     transform: CSS.Translate.toString(transform),
     width: isAction && block.offsetMins !== null ? '2px' : (block.offsetMins !== null ? `${Math.max(40, currentWidth)}px` : 'auto'),
     minWidth: isAction ? (block.offsetMins !== null ? '2px' : 'auto') : (block.offsetMins !== null && block.durationMins === 0 ? '40px' : 'auto'),
-    height: block.type === 'sleep' ? '88px' : (isAction && block.offsetMins !== null ? '88px' : '24px'),
+    height: isAction && block.offsetMins !== null ? trackHeight : '24px',
     zIndex: isDragging || isResizing ? 50 : (isNatural ? 5 : 10),
     opacity: isDragging ? 0.8 : 1,
-    top: block.offsetMins !== null ? trackTop : 'auto',
+    top: isAction && block.offsetMins !== null ? '4px' : (block.offsetMins !== null ? trackTop : 'auto'),
   };
 
   const handleResizeStart = (e: React.PointerEvent) => {
@@ -141,13 +142,9 @@ function DraggableBlock({
   if (isAction && block.offsetMins !== null) {
     const slotStagger = ((block.offsetMins ?? 0) / 15) % 2 === 0 ? 0 : 14;
     const labelTop = -16 - (actionIndex * 12) - slotStagger;
-    const displayLabel = block.label
-      .replace('Point Refill', 'Refill')
-      .replace('Train Refill', 'T-Ref')
-      .replace('Train Stack', 'T-Stack')
-      .replace('Train 400E', 'T400')
-      .replace('Train 250E', 'T250')
-      .replace('Train 150E', 'T150');
+    const displayLabel = block.label.startsWith('Train')
+      ? 'Train'
+      : (block.label === 'Point Refill' ? 'Refill' : block.label);
 
     return (
       <div
@@ -178,11 +175,11 @@ function DraggableBlock({
       className={`absolute left-0 cursor-grab active:cursor-grabbing border flex items-center justify-center text-[10px] font-bold tracking-wider rounded overflow-hidden shadow-lg select-none ${isResizing ? '' : 'transition-[width] duration-200'} ${
         block.offsetMins === null ? 'relative mb-2 w-full !top-auto' : ''
       } ${
-        isSleep ? 'bg-indigo-900/30 border-indigo-500/50 border-dashed text-indigo-300 backdrop-blur-sm' :
-        isDrug ? 'bg-rose-500/20 border-rose-500/50 text-rose-300' : 
-        isBooster ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300' :
-        isNatural ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300/50 border-dashed' :
-        'bg-yellow-500/20 border-yellow-500/50 text-yellow-300'
+        isSleep ? 'bg-indigo-950/80 border-indigo-500/80 border-dashed text-indigo-200 backdrop-blur-sm shadow-[0_0_12px_rgba(99,102,241,0.15)]' :
+        isDrug ? 'bg-rose-950/80 border-rose-500/80 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.15)]' : 
+        isBooster ? 'bg-cyan-950/80 border-cyan-500/80 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.15)]' :
+        isNatural ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-200/80 border-dashed shadow-[0_0_12px_rgba(16,185,129,0.1)]' :
+        'bg-yellow-950/80 border-yellow-500/80 text-yellow-200 shadow-[0_0_12px_rgba(234,179,8,0.15)]'
       }`}
       title={`${block.label} (${block.durationMins}m)`}
     >
@@ -211,7 +208,7 @@ function DroppableSlot({ minOffset, children }: { minOffset: number, children: R
   return (
     <div
       ref={setNodeRef}
-      className={`w-[10px] h-24 box-border relative flex items-end justify-center
+      className={`w-[10px] h-full box-border relative flex items-end justify-center
         ${isOver ? 'bg-indigo-500/40' : 'bg-transparent'}
         ${isHour ? 'border-l border-white/20' : 'border-l border-white/5'}
       `}
@@ -229,43 +226,14 @@ function DroppableSlot({ minOffset, children }: { minOffset: number, children: R
   );
 }
 
-function DroppableLibrary({ children }: { children: React.ReactNode }) {
-  const { isOver, setNodeRef } = useDroppable({
-    id: 'library'
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex flex-wrap p-4 min-h-[60px] bg-black/40 rounded-xl border transition-colors ${
-        isOver ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5'
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
-
 const leftEdgeDetection: CollisionDetection = ({ droppableContainers, collisionRect }) => {
   if (!collisionRect) return [];
 
   let closestSlot = null;
   let minDistance = Infinity;
-  let libraryContainer = null;
 
   for (const container of droppableContainers) {
-    if (container.id === 'library') {
-      libraryContainer = container;
-      // If the top of the block is within the library area, drop there
-      if (
-        container.rect.current &&
-        collisionRect.top >= container.rect.current.top &&
-        collisionRect.bottom <= container.rect.current.bottom
-      ) {
-        return [{ id: 'library', data: container.data.current }];
-      }
-      continue;
-    }
+    if (container.id === 'library') continue;
 
     if (container.rect.current) {
       // Find distance between the left edge of the dragging block and the left edge of the slot
@@ -284,14 +252,20 @@ const leftEdgeDetection: CollisionDetection = ({ droppableContainers, collisionR
     return [{ id: closestSlot.id, data: closestSlot.data.current }];
   }
 
-  return libraryContainer ? [{ id: 'library', data: libraryContainer.data.current }] : [];
+  return [];
 };
 
 function calculateAutoArrangeOffsets(
   blocksList: TimelineBlockData[],
   config: JumpConfig['items']
 ): { offsets: Record<string, number>; durations: Record<string, number> } {
-  const isStacked = config.ecstasy > 0 || config.edvd > 0;
+  const isStacked = 
+    config.ecstasy > 0 || 
+    config.edvd > 0 || 
+    config.truffles > 0 || 
+    config.tootsie > 0 || 
+    config.lollipop > 0 || 
+    config.fhc > 0;
   const isDailyRoutine = config.xanax === 3 && config.refill === 1;
 
   if (isDailyRoutine) {
@@ -533,6 +507,20 @@ function adjustNaturalBlocksAndSleepConstraints(
     });
   }
 
+  // Force alignment to the absolute left (shift to eliminate leading blank space)
+  const placedBlocks = newBlocks.filter(b => b.offsetMins !== null);
+  if (placedBlocks.length > 0) {
+    const minOffset = Math.min(...placedBlocks.map(b => b.offsetMins!));
+    if (minOffset > 0) {
+      newBlocks = newBlocks.map(b => {
+        if (b.offsetMins !== null) {
+          return { ...b, offsetMins: b.offsetMins - minOffset };
+        }
+        return b;
+      });
+    }
+  }
+
   return newBlocks;
 }
 
@@ -541,7 +529,13 @@ function enforceTimelineAnchors(
   config: JumpConfig['items']
 ): TimelineBlockData[] {
   let newBlocks = blocksList.map(b => ({ ...b }));
-  const isStacked = config.ecstasy > 0 || config.edvd > 0;
+  const isStacked = 
+    config.ecstasy > 0 || 
+    config.edvd > 0 || 
+    config.truffles > 0 || 
+    config.tootsie > 0 || 
+    config.lollipop > 0 || 
+    config.fhc > 0;
   const isDailyRoutine = config.xanax === 3 && config.refill === 1;
 
   // Calculate the end of the Xanax stack
@@ -858,8 +852,13 @@ export function JumpTimeline({
 
     // 7. Natural Energy
     if (!isStacked || isDailyRoutine) {
-      // Create 4 natural energy blocks for a typical 24h
-      for (let i = 0; i < 4; i++) {
+      // Dynamically calculate needed natural cycles to fully back the timeline's duration
+      const xanaxCdEnd = config.xanax * TORN_ITEMS.XANAX.cooldown.base;
+      const sleepDuration = (config.sleepHours || 0) * 60;
+      const estimatedMaxMins = xanaxCdEnd + sleepDuration + 120;
+      const neededNatCount = isDailyRoutine ? 4 : Math.max(4, Math.ceil(estimatedMaxMins / 300) + 1);
+
+      for (let i = 0; i < neededNatCount; i++) {
         arr.push({
           id: `natural-${i}`,
           type: 'natural',
@@ -929,69 +928,134 @@ export function JumpTimeline({
     const { active, over } = event;
     if (!over) return;
 
+    const targetOffset = over.data.current?.minOffset ?? null;
+    if (targetOffset === null) return;
+
     setBlocks((prev) => {
       const activeIdx = prev.findIndex(b => b.id === active.id);
       if (activeIdx === -1) return prev;
       
       const activeBlock = prev[activeIdx];
-      const oldOffset = activeBlock.offsetMins;
-
-      let targetOffset: number | null = null;
-      if (over.id === 'library') {
-        targetOffset = null;
-      } else {
-        targetOffset = over.data.current?.minOffset ?? null;
-      }
+      let newTargetOffset = targetOffset;
 
       // Drug overlap prevention: drugs cannot overlap with other drugs
-      if (activeBlock.type === 'drug' && targetOffset !== null) {
+      if (activeBlock.type === 'drug') {
         const otherDrugs = prev.filter(b => b.type === 'drug' && b.id !== active.id && b.offsetMins !== null);
         for (const other of otherDrugs) {
           const otherStart = other.offsetMins!;
           const otherEnd = otherStart + other.durationMins;
-          const activeEnd = targetOffset + activeBlock.durationMins;
+          const activeEnd = newTargetOffset + activeBlock.durationMins;
           // Check if the active block overlaps with this other drug
-          if (targetOffset < otherEnd && activeEnd > otherStart) {
+          if (newTargetOffset < otherEnd && activeEnd > otherStart) {
             // Push target to the end of the blocking drug to prevent overlap
-            targetOffset = otherEnd;
+            newTargetOffset = otherEnd;
           }
         }
       }
 
-      // Ripple/Shift Logic
-      let newBlocks = prev.map(b => ({ ...b }));
-      
-      if (targetOffset === null && oldOffset !== null) {
-        // Dragged FROM timeline TO library: shift blocks after oldOffset left
-        const shift = activeBlock.durationMins;
-        newBlocks.forEach(b => {
-          if (b.id !== active.id && b.offsetMins !== null) {
-            if (b.offsetMins > oldOffset) {
-              b.offsetMins -= shift;
-              if (b.offsetMins < 0) b.offsetMins = 0;
-            }
-          }
-        });
-      }
-
       // Assign the new target offset
-      newBlocks[activeIdx].offsetMins = targetOffset;
+      let newBlocks = prev.map(b => ({ ...b }));
+      newBlocks[activeIdx].offsetMins = newTargetOffset;
 
-      if (targetOffset !== null) {
-        return resolveCascadePushes(newBlocks, active.id as string, config);
-      }
-
-      return adjustNaturalBlocksAndSleepConstraints(newBlocks);
+      return resolveCascadePushes(newBlocks, active.id as string, config);
     });
   };
 
-  // We need 48 hours for extreme jumps
-  const TOTAL_HOURS = 48;
-  const SLOTS_PER_ROW = 96; // 24 hours * 4 slots/hr
+  const timelineBlocks = blocks.filter(b => b.offsetMins !== null);
+
+  // 动态计算总小时数：初始为24小时，如果超出则动态延长
+  const TOTAL_HOURS = useMemo(() => {
+    let maxMins = 24 * 60; // 初始 24 小时 (1440 mins)
+    timelineBlocks.forEach(b => {
+      const duration = b.durationMins > 0 ? b.durationMins : 15;
+      const endOffset = (b.offsetMins ?? 0) + duration;
+      if (endOffset > maxMins) {
+        maxMins = endOffset;
+      }
+    });
+    return Math.max(24, Math.ceil(maxMins / 60));
+  }, [timelineBlocks]);
+
   const totalSlots = TOTAL_HOURS * 4;
 
-  const libraryBlocks = blocks.filter(b => b.offsetMins === null);
-  const timelineBlocks = blocks.filter(b => b.offsetMins !== null);
+  // 动态多轨道避让分配
+  const blockTracks = useMemo(() => {
+    const tracks: { end: number; id: string }[][] = [];
+    const idToTrackIndex: Record<string, number> = {};
+
+    const sortedTimeline = [...timelineBlocks].sort((a, b) => {
+      if ((a.offsetMins ?? 0) !== (b.offsetMins ?? 0)) {
+        return (a.offsetMins ?? 0) - (b.offsetMins ?? 0);
+      }
+      return a.id.localeCompare(b.id);
+    });
+
+    const hasSleep = timelineBlocks.some(b => b.type === 'sleep');
+
+    // If sleep exists, pre-initialize the first track (track index 0) as empty to reserve it for sleep only
+    if (hasSleep && tracks.length === 0) {
+      tracks.push([]);
+    }
+
+    sortedTimeline.forEach(block => {
+      const start = block.offsetMins ?? 0;
+      const duration = block.durationMins > 0 ? block.durationMins : 15;
+      const end = start + duration;
+
+      let assignedTrack = 0;
+      let found = false;
+
+      if (block.type === 'sleep') {
+        // Sleep block is strictly assigned to the highest track (index 0)
+        assignedTrack = 0;
+        tracks[0].push({ end, id: block.id });
+        found = true;
+      } else {
+        // If sleep is active, other blocks must start assigning from track index 1 (second row)
+        const startTrack = hasSleep ? 1 : 0;
+
+        for (let t = startTrack; t < tracks.length; t++) {
+          const track = tracks[t];
+          const hasOverlap = track.some(placed => {
+            const placedBlock = timelineBlocks.find(b => b.id === placed.id);
+            if (!placedBlock) return false;
+
+            const pStart = placedBlock.offsetMins ?? 0;
+            const pDuration = placedBlock.durationMins > 0 ? placedBlock.durationMins : 15;
+            const pEnd = pStart + pDuration;
+            return (start < pEnd && end > pStart);
+          });
+
+          if (!hasOverlap) {
+            tracks[t].push({ end, id: block.id });
+            assignedTrack = t;
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          // If we couldn't find a spot and need to create a new track
+          if (hasSleep && tracks.length === 1) {
+            tracks.push([{ end, id: block.id }]); // Create track 1
+            assignedTrack = 1;
+          } else {
+            tracks.push([{ end, id: block.id }]);
+            assignedTrack = tracks.length - 1;
+          }
+          found = true;
+        }
+      }
+
+      idToTrackIndex[block.id] = assignedTrack;
+    });
+
+    return idToTrackIndex;
+  }, [timelineBlocks]);
+
+  const totalTracks = useMemo(() => {
+    return Math.max(3, ...Object.values(blockTracks).map(Number), 0) + 1;
+  }, [blockTracks]);
 
   const autoArrange = () => {
     setBlocks(prev => {
@@ -1008,25 +1072,142 @@ export function JumpTimeline({
   };
 
   return (
-    <div className="mt-8 p-6 bg-zinc-950 border-t border-white/5 shadow-2xl relative z-10 w-full">
-      <div className="max-w-7xl mx-auto flex flex-col gap-6">
-        <div className="flex items-center justify-between">
+    <div className="mt-0 p-5 bg-zinc-950 border-t border-white/5 shadow-2xl relative z-10 w-full">
+      <div className="max-w-7xl mx-auto flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2">
             <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Interactive Jump Execution Timeline
           </h3>
-          <button
-            onClick={autoArrange}
-            className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold uppercase rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
-          >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Auto Arrange
-          </button>
+          
+          <div className="hidden sm:flex items-center gap-3 w-full sm:w-auto shrink-0 justify-between sm:justify-start">
+            {/* Sleep Schedule Control (Moved to timeline) */}
+            <div className="flex items-center gap-2 bg-indigo-950/20 p-1 px-3 rounded-xl border border-indigo-500/20 shadow-md">
+              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Sleep Schedule</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    const newHours = Math.max(0, (config.sleepHours || 0) - 1);
+                    window.dispatchEvent(new CustomEvent('updateSleep', { detail: newHours }));
+                  }}
+                  className="w-5 h-5 flex justify-center items-center rounded bg-white/5 hover:bg-indigo-500/20 text-zinc-300 hover:text-white transition-colors text-xs font-black select-none cursor-pointer"
+                >-</button>
+                <span className="font-mono text-xs w-6 text-center text-indigo-300 font-bold">{(config.sleepHours || 0)}h</span>
+                <button
+                  onClick={() => {
+                    const newHours = Math.min(24, (config.sleepHours || 0) + 1);
+                    window.dispatchEvent(new CustomEvent('updateSleep', { detail: newHours }));
+                  }}
+                  className="w-5 h-5 flex justify-center items-center rounded bg-white/5 hover:bg-indigo-500/20 text-zinc-300 hover:text-white transition-colors text-xs font-black select-none cursor-pointer"
+                >+</button>
+              </div>
+            </div>
+
+            <button
+              onClick={autoArrange}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold uppercase rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20 cursor-pointer"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Auto Arrange
+            </button>
+          </div>
         </div>
+
+      {/* Unified Jump Execution Dashboard */}
+      <div className="mt-3 bg-zinc-900/40 p-5 rounded-2xl border border-white/5 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-3xl rounded-full mix-blend-screen pointer-events-none" />
+        
+        <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+          <span className="w-1.5 h-3 bg-indigo-500 rounded-full" />
+          Execution Summary
+        </h3>
+
+        <div className="flex flex-col gap-6">
+          {/* Financials & Yield */}
+          <div className="flex flex-col gap-4">
+            <h4 className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+              Strategy Yield & Financials
+            </h4>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Total Gain */}
+              <div className="bg-emerald-500/12 border border-emerald-500/30 p-4 rounded-xl flex flex-col justify-between min-h-[90px] shadow-md shadow-emerald-950/20">
+                <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider">Total Gain</span>
+                <span className="text-xl font-black font-mono text-emerald-300 mt-2">
+                  +{Math.floor(totalGain || 0).toLocaleString()}
+                  <span className="text-[10px] font-bold text-emerald-400 ml-1 uppercase">{statType?.substring(0, 3)}</span>
+                </span>
+              </div>
+
+              {/* Final Stat */}
+              <div className="bg-indigo-500/12 border border-indigo-500/30 p-4 rounded-xl flex flex-col justify-between min-h-[90px] shadow-md shadow-indigo-950/20">
+                <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">Final Stat</span>
+                <span className="text-xl font-black font-mono text-indigo-200 mt-2">
+                  {Math.floor(finalStat || 0).toLocaleString()}
+                </span>
+              </div>
+
+              {/* Total Cost */}
+              <div className="bg-rose-950/40 border border-rose-500/50 p-4 rounded-xl flex flex-col justify-between min-h-[90px] shadow-lg shadow-rose-950/30 transition-all duration-300 hover:border-rose-400/70">
+                <span className="text-[9px] text-rose-300 font-extrabold uppercase tracking-wider">Total Cost</span>
+                <span className="text-xl font-black font-mono text-rose-100 drop-shadow-[0_0_10px_rgba(244,63,94,0.4)] mt-2">
+                  {totalCost ? `$${(totalCost / 1000000).toFixed(2)}M` : 'FREE'}
+                </span>
+              </div>
+
+              {/* Cost Per Stat */}
+              <div className="bg-amber-950/40 border border-amber-500/50 p-4 rounded-xl flex flex-col justify-between min-h-[90px] shadow-lg shadow-amber-950/30 transition-all duration-300 hover:border-amber-400/70">
+                <span className="text-[9px] text-amber-300 font-extrabold uppercase tracking-wider">Cost per Stat</span>
+                <span className="text-xl font-black font-mono text-amber-100 drop-shadow-[0_0_10px_rgba(245,158,11,0.4)] mt-2">
+                  {totalCost && totalGain && totalGain > 0 
+                    ? `$${Math.floor(totalCost / totalGain).toLocaleString()}` 
+                    : 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile-only Sleep Setting & Auto Arrange Panel */}
+      <div className="flex sm:hidden items-center justify-between gap-3 bg-zinc-900/40 p-4 rounded-xl border border-white/5 shadow-xl mt-3 mb-1">
+        {/* Sleep Schedule Control */}
+        <div className="flex items-center gap-2 bg-indigo-950/20 p-1 px-3 rounded-xl border border-indigo-500/20 shadow-md">
+          <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Sleep Schedule</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                const newHours = Math.max(0, (config.sleepHours || 0) - 1);
+                window.dispatchEvent(new CustomEvent('updateSleep', { detail: newHours }));
+              }}
+              className="w-5 h-5 flex justify-center items-center rounded bg-white/5 hover:bg-indigo-500/20 text-zinc-300 hover:text-white transition-colors text-xs font-black select-none cursor-pointer"
+            >-</button>
+            <span className="font-mono text-xs w-6 text-center text-indigo-300 font-bold">{(config.sleepHours || 0)}h</span>
+            <button
+              onClick={() => {
+                const newHours = Math.min(24, (config.sleepHours || 0) + 1);
+                window.dispatchEvent(new CustomEvent('updateSleep', { detail: newHours }));
+              }}
+              className="w-5 h-5 flex justify-center items-center rounded bg-white/5 hover:bg-indigo-500/20 text-zinc-300 hover:text-white transition-colors text-xs font-black select-none cursor-pointer"
+            >+</button>
+          </div>
+        </div>
+
+        {/* Auto Arrange */}
+        <button
+          onClick={autoArrange}
+          className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold uppercase rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20 cursor-pointer"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Auto Arrange
+        </button>
+      </div>
 
       <DndContext 
         onDragEnd={handleDragEnd} 
@@ -1042,28 +1223,23 @@ export function JumpTimeline({
         }}
       >
         <div id="dnd-timeline-container" className="flex flex-col gap-6">
-          
-          <div className="flex flex-col">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase mb-2">Unassigned Items</span>
-            <DroppableLibrary>
-              {libraryBlocks.map(b => (
-                <DraggableBlock key={b.id} block={b} />
-              ))}
-              {libraryBlocks.length === 0 && (
-                <span className="text-xs text-zinc-600 m-auto">All items placed!</span>
-              )}
-            </DroppableLibrary>
-          </div>
 
           <div className="flex flex-col mb-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase mb-2">Timeline (Drag here)</span>
+            <span className="text-[10px] text-zinc-500 font-bold uppercase mb-2">Timeline</span>
             
             <div className="relative w-full max-w-full overflow-x-auto pt-6 pb-8 custom-scrollbar">
-              <div className="relative flex bg-black/60 rounded-xl border border-white/5 shadow-inner overflow-visible min-w-max mx-8">
+              <div 
+                style={{ height: `${totalTracks * 28 + 8}px` }}
+                className="relative flex bg-black/60 rounded-xl border border-white/5 shadow-inner overflow-visible min-w-max mx-8 transition-[height] duration-300"
+              >
                 {/* Horizontal Track Grid Lines */}
-                <div className="absolute top-[4px] left-0 w-full h-[24px] bg-white/[0.02] border-y border-white/5 pointer-events-none" />
-                <div className="absolute top-[32px] left-0 w-full h-[24px] bg-white/[0.02] border-y border-white/5 pointer-events-none" />
-                <div className="absolute top-[60px] left-0 w-full h-[24px] bg-white/[0.02] border-y border-white/5 pointer-events-none" />
+                {Array.from({ length: totalTracks }).map((_, trackIdx) => (
+                  <div 
+                    key={trackIdx}
+                    style={{ top: `${trackIdx * 28 + 4}px` }}
+                    className="absolute left-0 w-full h-[24px] bg-white/[0.02] border-y border-white/5 pointer-events-none" 
+                  />
+                ))}
 
                 {Array.from({ length: totalSlots }).map((_, i) => {
                   const minOffset = i * 15;
@@ -1081,6 +1257,8 @@ export function JumpTimeline({
                             block={b} 
                             actionIndex={actionIndex}
                             totalActions={totalActions}
+                            trackIndex={blockTracks[b.id] ?? 0}
+                            totalTracks={totalTracks}
                           />
                         );
                       })}
@@ -1093,185 +1271,6 @@ export function JumpTimeline({
 
         </div>
       </DndContext>
-
-      {/* Unified Jump Execution Dashboard */}
-      {timelineBlocks.length === 0 ? (
-        <div className="bg-zinc-900/20 p-10 rounded-2xl border border-white/5 text-center mt-6">
-          <svg className="w-8 h-8 text-zinc-600 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-          </svg>
-          <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
-            Drag items onto the timeline to activate the Execution Hub
-          </span>
-        </div>
-      ) : (
-        <div className="mt-8 bg-zinc-900/40 p-6 rounded-2xl border border-white/5 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-3xl rounded-full mix-blend-screen pointer-events-none" />
-          
-          <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-            <span className="w-1.5 h-3 bg-indigo-500 rounded-full" />
-            Tactical Execution Dashboard & Sequence
-          </h3>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column: Financials & Yield */}
-            <div className="lg:col-span-5 flex flex-col gap-4">
-              <h4 className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                Strategy Yield & Financials
-              </h4>
-              
-              <div className="grid grid-cols-2 gap-3">
-                {/* Total Gain */}
-                <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-xl flex flex-col justify-between">
-                  <span className="text-[9px] text-emerald-500/70 font-bold uppercase tracking-wider">Total Gain</span>
-                  <span className="text-xl font-black font-mono text-emerald-400 mt-2">
-                    +{Math.floor(totalGain || 0).toLocaleString()}
-                    <span className="text-[10px] font-bold text-emerald-500/70 ml-1 uppercase">{statType?.substring(0, 3)}</span>
-                  </span>
-                </div>
-
-                {/* Final Stat */}
-                <div className="bg-indigo-500/5 border border-indigo-500/10 p-4 rounded-xl flex flex-col justify-between">
-                  <span className="text-[9px] text-indigo-500/70 font-bold uppercase tracking-wider">Final Stat</span>
-                  <span className="text-xl font-black font-mono text-indigo-300 mt-2">
-                    {Math.floor(finalStat || 0).toLocaleString()}
-                  </span>
-                </div>
-
-                {/* Total Cost */}
-                <div className="bg-rose-500/5 border border-rose-500/10 p-4 rounded-xl flex flex-col justify-between">
-                  <span className="text-[9px] text-rose-500/70 font-bold uppercase tracking-wider">Total Cost</span>
-                  <span className="text-xl font-black font-mono text-rose-400 mt-2">
-                    {totalCost ? `$${(totalCost / 1000000).toFixed(2)}M` : 'FREE'}
-                  </span>
-                </div>
-
-                {/* Cost Per Stat */}
-                <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl flex flex-col justify-between">
-                  <span className="text-[9px] text-amber-500/70 font-bold uppercase tracking-wider">Cost per Stat</span>
-                  <span className="text-xl font-black font-mono text-amber-400 mt-2">
-                    {totalCost && totalGain && totalGain > 0 
-                      ? `$${Math.floor(totalCost / totalGain).toLocaleString()}` 
-                      : 'N/A'}
-                  </span>
-                </div>
-              </div>
-
-              {/* 24h Yield Extrapolation */}
-              {yield24h && (
-                <div className="bg-zinc-950/60 border border-white/5 p-4 rounded-xl flex flex-col gap-3 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 blur-2xl rounded-full pointer-events-none" />
-                  <div className="flex items-center gap-1.5 text-[9px] text-indigo-400 font-bold uppercase tracking-widest">
-                    <svg className="w-3 h-3 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                    24h Extrapolation (Daily Yield)
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col">
-                      <span className="text-[8px] text-zinc-500 font-bold uppercase">Estimated Daily Gain</span>
-                      <span className="text-sm font-mono text-emerald-400 font-bold mt-0.5">
-                        +{Math.floor(yield24h.gain24h).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[8px] text-zinc-500 font-bold uppercase">Estimated Daily Cost</span>
-                      <span className="text-sm font-mono text-rose-400 font-bold mt-0.5">
-                        {yield24h.cost24h > 0 ? `-$${(yield24h.cost24h / 1000000).toFixed(1)}M` : 'FREE'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Right Column: Step-by-Step Execution Plan */}
-            <div className="lg:col-span-7 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h4 className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                  Chronological Step Plan (Top to Bottom)
-                </h4>
-                <span className="text-[9px] bg-zinc-900 border border-white/5 text-zinc-400 px-2 py-0.5 rounded font-mono">
-                  {timelineBlocks.length} actions sequenced
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                {[...timelineBlocks]
-                  .sort((a, b) => (a.offsetMins ?? 0) - (b.offsetMins ?? 0))
-                  .map((block) => {
-                    const mins = block.offsetMins ?? 0;
-                    const h = Math.floor(mins / 60);
-                    const m = mins % 60;
-                    const timeStr = `${h}h${m > 0 ? ` ${m}m` : ''}`;
-
-                    const borderColor = 
-                      block.type === 'drug' ? 'border-rose-500/20' :
-                      block.type === 'booster' ? 'border-cyan-500/20' :
-                      block.type === 'sleep' ? 'border-indigo-500/20' :
-                      block.type === 'natural' ? 'border-emerald-500/20' :
-                      'border-amber-500/20';
-
-                    const dotColor = 
-                      block.type === 'drug' ? 'bg-rose-500' :
-                      block.type === 'booster' ? 'bg-cyan-500' :
-                      block.type === 'sleep' ? 'bg-indigo-500' :
-                      block.type === 'natural' ? 'bg-emerald-500' :
-                      'bg-amber-500';
-
-                    const textColor = 
-                      block.type === 'drug' ? 'text-rose-300' :
-                      block.type === 'booster' ? 'text-cyan-300' :
-                      block.type === 'sleep' ? 'text-indigo-300' :
-                      block.type === 'natural' ? 'text-emerald-300/80' :
-                      'text-amber-300';
-
-                    const bgCard = 
-                      block.type === 'drug' ? 'bg-rose-500/[0.02]' :
-                      block.type === 'booster' ? 'bg-cyan-500/[0.02]' :
-                      block.type === 'sleep' ? 'bg-indigo-500/[0.02]' :
-                      block.type === 'natural' ? 'bg-emerald-500/[0.02]' :
-                      'bg-amber-500/[0.02]';
-
-                    return (
-                      <div 
-                        key={block.id} 
-                        className={`flex items-center justify-between border ${borderColor} ${bgCard} p-3 rounded-xl hover:border-white/10 transition-all duration-200`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Chronological Offset */}
-                          <div className="bg-black/60 border border-white/5 px-2 py-1 rounded text-[9px] font-mono font-bold text-zinc-400 min-w-[55px] text-center">
-                            T+{timeStr}
-                          </div>
-                          
-                          {/* Dot and Label */}
-                          <div className="flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${dotColor} shadow-sm`} />
-                            <span className={`text-[11px] font-bold tracking-wider ${textColor}`}>
-                              {block.label}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Cooldown/Duration details */}
-                        {block.durationMins > 0 && (
-                          <div className="text-[9px] text-zinc-500 font-mono bg-zinc-950/60 px-2 py-0.5 rounded border border-white/[0.02]">
-                            {Math.floor(block.durationMins / 60)}h{block.durationMins % 60 > 0 ? `${block.durationMins % 60}m` : ''} Cooldown
-                          </div>
-                        )}
-                        {block.type === 'action' && (
-                          <div className="text-[8px] uppercase tracking-wider text-amber-500/60 font-bold">
-                            Training Action
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       </div>
     </div>

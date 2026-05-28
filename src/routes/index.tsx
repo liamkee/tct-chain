@@ -107,10 +107,15 @@ function DashboardLayout() {
                   <span className="text-[10px] text-indigo-500 font-bold uppercase leading-none mt-1">Intelligence</span>
                 </div>
               </div>
-              {/* Mobile disconnect button can go here or keep it below */}
-              <button onClick={logout} className="md:hidden px-4 py-1.5 rounded-xl bg-zinc-900 border border-white/10 text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-100 hover:border-zinc-700 transition-all active:scale-95">
-                Logout
-              </button>
+              {/* Mobile Navigation Buttons */}
+              <div className="md:hidden flex items-center gap-2">
+                <Link to="/profile" className="px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-all active:scale-95">
+                  Profile
+                </Link>
+                <button onClick={logout} className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-100 hover:border-zinc-700 transition-all active:scale-95">
+                  Logout
+                </button>
+              </div>
             </div>
 
             <div className="flex-none flex justify-center items-center gap-4 w-full md:w-auto">
@@ -200,7 +205,7 @@ function DashboardLayout() {
             </div>
 
             {/* Center Core: Progress & Timeout */}
-            <div className="bg-zinc-900/40 border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center gap-4 shadow-[0_0_50px_rgba(79,70,229,0.1)] relative overflow-hidden group h-full">
+            <div className="bg-zinc-900/75 border border-white/15 rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center gap-4 shadow-[0_0_50px_rgba(79,70,229,0.15)] shadow-black/40 relative overflow-hidden group h-full">
               <div className="absolute inset-0 bg-linear-to-b from-indigo-500/5 to-transparent opacity-50" />
 
               <div className="relative z-10 flex flex-col items-center">
@@ -374,7 +379,7 @@ function MasterSwitchControl({ masterSwitch }: { masterSwitch: string }) {
 
 function StatCard({ label, value, sub, color, extra }: { label: string, value: React.ReactNode, sub: string, color: string, extra?: React.ReactNode }) {
   return (
-    <div className="bg-zinc-900/40 border border-white/10 rounded-2xl p-4 flex flex-col text-left min-h-[120px] relative overflow-hidden group transition-all hover:border-white/20 flex-1">
+    <div className="bg-zinc-900/75 border border-white/15 rounded-2xl p-4 flex flex-col text-left min-h-[120px] relative overflow-hidden group transition-all hover:border-white/35 hover:bg-zinc-900/85 shadow-lg shadow-black/30 flex-1">
       <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest leading-none mb-3">{label}</span>
       <div className={`font-mono tracking-tighter ${color} leading-none flex-1`}>
         {value}

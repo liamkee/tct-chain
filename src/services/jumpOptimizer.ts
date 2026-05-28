@@ -73,7 +73,8 @@ export function generateOptimalPresets(params: OptimizerParams): OptimalPreset[]
       params.energyPerTrain,
       params.perkMultiplier,
       preset.config,
-      params.baseHappy
+      params.baseHappy,
+      params.naturalEnergyPerDay
     );
 
     // 3. Calculate Cost
@@ -187,7 +188,8 @@ export function calculateJumpStatGain(
   energyPerTrain: number,
   perkMultiplier: number,
   config?: JumpConfig['items'],
-  baseHappy?: number
+  baseHappy?: number,
+  naturalEnergyPerDay?: number
 ) {
   const isDailyRoutine = config && config.xanax === 3 && config.refill === 1;
 
@@ -197,29 +199,67 @@ export function calculateJumpStatGain(
     let statVal = currentStat;
     let currentHappy = peakHappy;
     
-    // A. Wake-up Jump Train: 400E (150E natural + 250E Xanax #1) trained at peak happy
-    const resJump = calculateBatchTrain(statType, statVal, currentHappy, 400, gymDots, energyPerTrain, perkMultiplier);
-    currentHappy = resJump.finalHappy;
-    statVal = resJump.finalStat;
-    
-    // B. Refill Train: 250E trained right after jump train at remaining happy
-    const resRefill = calculateBatchTrain(statType, statVal, currentHappy, maxEnergy, gymDots, energyPerTrain, perkMultiplier);
-    currentHappy = resRefill.finalHappy;
-    statVal = resRefill.finalStat;
-    
-    // C. Other 2 Xanax: 2 * 250E = 500E trained at base happy
-    const resXanaxOther = calculateBatchTrain(statType, statVal, activeBaseHappy, 500, gymDots, energyPerTrain, perkMultiplier);
-    statVal = resXanaxOther.finalStat;
-    
-    // D. Other 3 natural cycles: 3 * 150E = 450E trained at base happy
-    const resNaturalOther = calculateBatchTrain(statType, statVal, activeBaseHappy, 450, gymDots, energyPerTrain, perkMultiplier);
-    statVal = resNaturalOther.finalStat;
-    
-    return {
-      totalStatGained: statVal - currentStat,
-      finalStat: statVal,
-      finalHappy: resNaturalOther.finalHappy
-    };
+    const sleepHours = config.sleepHours || 0;
+    const activeNaturalEnergyPerDay = naturalEnergyPerDay ?? 720;
+
+    if (sleepHours > 0) {
+      // 1. Energy accumulated during sleep (usually caps at maxEnergy, e.g. 150E)
+      const sleepAccumulated = Math.floor(Math.min(maxEnergy, sleepHours * (activeNaturalEnergyPerDay / 24)) / 5) * 5;
+      
+      // 2. Remaining natural energy gained while awake (no sleep leakage)
+      const awakeNatural = Math.floor(((24 - sleepHours) * (activeNaturalEnergyPerDay / 24)) / 5) * 5;
+
+      // A. Wake-up Jump Train: (250E Xanax #1 + sleepAccumulated) trained at peak happy
+      const resJump = calculateBatchTrain(statType, statVal, currentHappy, 250 + sleepAccumulated, gymDots, energyPerTrain, perkMultiplier);
+      currentHappy = resJump.finalHappy;
+      statVal = resJump.finalStat;
+
+      // B. Refill Train: maxEnergy trained right after jump train at remaining happy
+      const resRefill = calculateBatchTrain(statType, statVal, currentHappy, maxEnergy, gymDots, energyPerTrain, perkMultiplier);
+      currentHappy = resRefill.finalHappy;
+      statVal = resRefill.finalStat;
+
+      // C. Other 2 Xanax: 2 * 250E = 500E trained at base happy
+      const resXanaxOther = calculateBatchTrain(statType, statVal, activeBaseHappy, 500, gymDots, energyPerTrain, perkMultiplier);
+      statVal = resXanaxOther.finalStat;
+
+      // D. Other awake natural energy trained at base happy
+      const resNaturalOther = calculateBatchTrain(statType, statVal, activeBaseHappy, awakeNatural, gymDots, energyPerTrain, perkMultiplier);
+      statVal = resNaturalOther.finalStat;
+
+      return {
+        totalStatGained: statVal - currentStat,
+        finalStat: statVal,
+        finalHappy: resNaturalOther.finalHappy
+      };
+    } else {
+      // If there is no sleep scheduled, don't compute sleep accumulation or leakage.
+      // Train natural energy fully and train Xanax #1 normally.
+      
+      // A. Regular Xanax Train: 250E (Xanax #1) trained at peak happy
+      const resJump = calculateBatchTrain(statType, statVal, currentHappy, 250, gymDots, energyPerTrain, perkMultiplier);
+      currentHappy = resJump.finalHappy;
+      statVal = resJump.finalStat;
+
+      // B. Refill Train: maxEnergy trained right after jump train at remaining happy
+      const resRefill = calculateBatchTrain(statType, statVal, currentHappy, maxEnergy, gymDots, energyPerTrain, perkMultiplier);
+      currentHappy = resRefill.finalHappy;
+      statVal = resRefill.finalStat;
+
+      // C. Other 2 Xanax: 2 * 250E = 500E trained at base happy
+      const resXanaxOther = calculateBatchTrain(statType, statVal, activeBaseHappy, 500, gymDots, energyPerTrain, perkMultiplier);
+      statVal = resXanaxOther.finalStat;
+
+      // D. All natural energy trained at base happy
+      const resNaturalOther = calculateBatchTrain(statType, statVal, activeBaseHappy, activeNaturalEnergyPerDay, gymDots, energyPerTrain, perkMultiplier);
+      statVal = resNaturalOther.finalStat;
+
+      return {
+        totalStatGained: statVal - currentStat,
+        finalStat: statVal,
+        finalHappy: resNaturalOther.finalHappy
+      };
+    }
   }
 
   let totalStatGained = 0;
@@ -236,6 +276,8 @@ export function calculateJumpStatGain(
 
   // 2. FHCs
   for (let i = 0; i < jump.fhcCount; i++) {
+    // Each FHC increases happy by 500 in Torn before training
+    currentHappy = Math.min(99999, currentHappy + 500);
     const res = calculateBatchTrain(statType, statVal, currentHappy, maxEnergy, gymDots, energyPerTrain, perkMultiplier);
     totalStatGained += res.totalStatGained;
     currentHappy = res.finalHappy;

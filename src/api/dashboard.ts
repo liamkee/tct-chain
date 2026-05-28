@@ -53,14 +53,14 @@ dashboard.get('/clear', async (c) => {
   return c.text('Dashboard Cache Cleared!')
 })
 
-// Start engine (admin only)
+// Start engine (all logged-in users)
 dashboard.get('/start', async (c) => {
   const stub = getFactionDO(c)
   await stub.fetch(new URL('/internal/start', c.req.url).toString())
   return c.text('Tactical Engine Started!')
 })
 
-// Stop engine (admin only)
+// Stop engine (all logged-in users)
 dashboard.get('/stop', async (c) => {
   const stub = getFactionDO(c)
   await stub.fetch(new URL('/internal/stop', c.req.url).toString())

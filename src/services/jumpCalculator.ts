@@ -168,6 +168,9 @@ export function calculateJump(config: JumpConfig): JumpCalculationResult {
   for (let i = 0; i < config.items.fhc; i++) {
     totalBoosterCd += fhcCd;
     currentEnergy += config.maxEnergy; // FHC refills to max
+    const prevHappy = currentHappy;
+    currentHappy = Math.min(99999, currentHappy + 500);
+    const actualHappyGain = currentHappy - prevHappy;
     
     timeline.push({
       timeOffsetMins: prepTimeMins,
@@ -175,7 +178,7 @@ export function calculateJump(config: JumpConfig): JumpCalculationResult {
       drugCdAccumulated: totalDrugCd,
       boosterCdAccumulated: totalBoosterCd,
       energyChange: config.maxEnergy,
-      happyChange: 0
+      happyChange: actualHappyGain
     });
 
     timeline.push({

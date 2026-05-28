@@ -24,6 +24,7 @@ function ProfilePage() {
     return localStorage.getItem('tct_selected_gym') || 'premier_fitness';
   })
   const [selectedStat, setSelectedStat] = useState<'strength' | 'speed' | 'defense' | 'dexterity'>('strength')
+  const [perksCollapsed, setPerksCollapsed] = useState(true)
 
   useEffect(() => {
     localStorage.setItem('tct_selected_gym', selectedGymId);
@@ -42,6 +43,9 @@ function ProfilePage() {
   const [boosterCd, setBoosterCd] = useState<number>(0)
   const [drugCd, setDrugCd] = useState<number>(0)
 
+  // Active Tooltip for mobile toggle (mutually exclusive)
+  const [activeTooltip, setActiveTooltip] = useState<'energy' | 'happy' | null>(null);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setBoosterCd(prev => Math.max(0, prev - 1));
@@ -57,7 +61,7 @@ function ProfilePage() {
         if (res.error) throw new Error(res.error)
         setData(res.data)
         setBaseHappy(res.data.happy?.maximum || 4025)
-        setBaseEnergy(res.data.energy?.current || 150)
+        setBaseEnergy(res.data.energy?.maximum || 150)
         setBoosterCd(res.data.cooldowns?.booster || 0)
         setDrugCd(res.data.cooldowns?.drug || 0)
         setEditableStats({
@@ -73,6 +77,47 @@ function ProfilePage() {
         setLoading(false)
       })
   }, [])
+
+  // Handle sleep hours update from JumpTimeline
+  useEffect(() => {
+    const handleUpdateSleep = (e: Event) => {
+      const customEvent = e as CustomEvent<number>;
+      const newHours = customEvent.detail;
+      setCurrentConfig((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          sleepHours: newHours
+        };
+      });
+    };
+
+    window.addEventListener('updateSleep', handleUpdateSleep);
+    return () => window.removeEventListener('updateSleep', handleUpdateSleep);
+  }, []);
+
+  // Handle click outside to close active tooltip (mutually exclusive)
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.info-tooltip-trigger')) {
+        setActiveTooltip(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle page scrolling to auto-close active tooltip (great for mobile UX)
+  useEffect(() => {
+    const handleScroll = () => {
+      setActiveTooltip(null);
+    };
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    return () => window.removeEventListener('scroll', handleScroll, { capture: true });
+  }, []);
 
   const multipliers = useMemo(() => {
     if (!data) return null
@@ -125,6 +170,8 @@ function ProfilePage() {
     const perkMult = multipliers[selectedStat]
     const energyPerTrain = gym.energy_per_train || 5;
 
+    const naturalEnergyPerDay = (data.donator === 1) ? 720 : 480;
+
     const res = calculateJumpStatGain(
       currentJump,
       data.energy?.maximum || 150,
@@ -134,7 +181,8 @@ function ProfilePage() {
       energyPerTrain,
       perkMult,
       currentConfig,
-      baseHappy
+      baseHappy,
+      naturalEnergyPerDay
     );
 
     return {
@@ -217,34 +265,6 @@ function ProfilePage() {
         </div>
 
         <div className="flex flex-col gap-6 w-full">
-          {/* Tactical Overview */}
-            <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-4">
-              <h2 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Current Status</h2>
-
-              <div className="flex justify-between items-center bg-zinc-950 p-4 rounded-xl border border-white/5">
-                <span className="text-sm font-bold text-zinc-400">Energy</span>
-                <span className="text-xl font-mono text-emerald-400">{data.energy?.current} / {data.energy?.maximum}</span>
-              </div>
-              <div className="flex justify-between items-center bg-zinc-950 p-4 rounded-xl border border-white/5">
-                <span className="text-sm font-bold text-zinc-400">Happy</span>
-                <span className="text-xl font-mono text-yellow-400">{data.happy?.current || baseHappy}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div className="bg-zinc-950 p-3 rounded-xl border border-white/5 flex flex-col">
-                  <span className="text-[9px] text-zinc-600 font-bold uppercase">Booster CD</span>
-                  <span className={`font-mono text-sm mt-1 ${boosterCd > 0 ? 'text-rose-400' : 'text-zinc-300'}`}>
-                    {formatCd(boosterCd)}
-                  </span>
-                </div>
-                <div className="bg-zinc-950 p-3 rounded-xl border border-white/5 flex flex-col">
-                  <span className="text-[9px] text-zinc-600 font-bold uppercase">Drug CD</span>
-                  <span className={`font-mono text-sm mt-1 ${drugCd > 0 ? 'text-rose-400' : 'text-zinc-300'}`}>
-                    {formatCd(drugCd)}
-                  </span>
-                </div>
-              </div>
-            </div>
 
           {/* Happy Jump Simulator */}
           <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-6 w-full">
@@ -302,8 +322,8 @@ function ProfilePage() {
                       key={stat.id}
                       className={`rounded-xl border transition-all duration-200 overflow-hidden flex flex-col ${
                         selectedStat === stat.id 
-                          ? 'bg-indigo-500/10 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.1)]' 
-                          : 'bg-zinc-950 border-white/5 hover:border-white/20'
+                          ? 'bg-indigo-500/20 border-indigo-550 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
+                          : 'bg-zinc-900/60 border-white/10 hover:border-white/20 shadow-md'
                       }`}
                     >
                       <button
@@ -335,12 +355,58 @@ function ProfilePage() {
 
               <div className="flex gap-4 w-full min-w-0 md:col-span-2 mt-2">
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Base Energy</label>
-                  <input type="number" step="5" className="w-full min-w-0 bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={baseEnergy} onChange={e => setBaseEnergy(Number(e.target.value))} />
+                  <div className="flex items-center gap-1.5 relative group info-tooltip-trigger">
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Start Energy</label>
+                    <button 
+                      onClick={() => setActiveTooltip(prev => prev === 'energy' ? null : 'energy')}
+                      className="cursor-pointer text-zinc-500 hover:text-indigo-400 hover:bg-zinc-800/40 active:bg-zinc-850/60 transition-colors w-7 h-7 flex items-center justify-center -ml-1 rounded-full select-none"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                    {/* Tooltip Card */}
+                    <div className={`fixed left-4 right-4 bottom-24 md:absolute md:left-0 md:right-auto md:bottom-full md:mb-2.5 md:w-72 bg-zinc-900 border border-white/10 p-3.5 rounded-xl shadow-2xl text-[10.5px] text-zinc-300 font-medium normal-case leading-relaxed pointer-events-none z-50 animate-in fade-in slide-in-from-bottom-2 duration-200 ${
+                      activeTooltip === 'energy' ? '!block pointer-events-auto shadow-[0_15px_40px_rgba(99,102,241,0.25)] border-indigo-500/30' : 'hidden md:group-hover:block'
+                    }`}>
+                      <div className="absolute -bottom-1.5 left-4.5 w-3 h-3 bg-zinc-900 border-r border-b border-white/10 rotate-45 hidden md:block" />
+                      <p className="font-bold text-indigo-400 mb-1 flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Start Energy Explanation
+                      </p>
+                      If you want to simulate gym training using your current active energy, enter your actual energy value here. If you only want to calculate the Happy Jump itself (without any pre-existing energy), simply set it to <span className="text-white font-semibold">0</span>.
+                    </div>
+                  </div>
+                  <input type="number" step="5" className="w-full min-w-0 bg-zinc-900 border border-white/20 hover:border-indigo-500/50 rounded-xl p-3 text-sm font-mono font-bold text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-zinc-900 transition-all duration-200" value={baseEnergy} onChange={e => setBaseEnergy(Number(e.target.value))} />
                 </div>
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Base Happy</label>
-                  <input type="number" className="w-full min-w-0 bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={baseHappy} onChange={e => setBaseHappy(Number(e.target.value))} />
+                  <div className="flex items-center gap-1.5 relative group info-tooltip-trigger">
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase truncate">Start Happy</label>
+                    <button 
+                      onClick={() => setActiveTooltip(prev => prev === 'happy' ? null : 'happy')}
+                      className="cursor-pointer text-zinc-500 hover:text-indigo-400 hover:bg-zinc-800/40 active:bg-zinc-850/60 transition-colors w-7 h-7 flex items-center justify-center -ml-1 rounded-full select-none"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                    {/* Tooltip Card */}
+                    <div className={`fixed left-4 right-4 bottom-24 md:absolute md:left-0 md:right-auto md:bottom-full md:mb-2.5 md:w-72 bg-zinc-900 border border-white/10 p-3.5 rounded-xl shadow-2xl text-[10.5px] text-zinc-300 font-medium normal-case leading-relaxed pointer-events-none z-50 animate-in fade-in slide-in-from-bottom-2 duration-200 ${
+                      activeTooltip === 'happy' ? '!block pointer-events-auto shadow-[0_15px_40px_rgba(99,102,241,0.25)] border-indigo-500/30' : 'hidden md:group-hover:block'
+                    }`}>
+                      <div className="absolute -bottom-1.5 left-4.5 w-3 h-3 bg-zinc-900 border-r border-b border-white/10 rotate-45 hidden md:block" />
+                      <p className="font-bold text-indigo-400 mb-1 flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Start Happy Explanation
+                      </p>
+                      Used for high-precision stat gain calculations. In standard scenarios, you should enter your <span className="text-white font-semibold">maximum Happy</span> capacity here so the gym formula calculates the absolute correct returns.
+                    </div>
+                  </div>
+                  <input type="number" className="w-full min-w-0 bg-zinc-900 border border-white/20 hover:border-indigo-500/50 rounded-xl p-3 text-sm font-mono font-bold text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-zinc-900 transition-all duration-200" value={baseHappy} onChange={e => setBaseHappy(Number(e.target.value))} />
                 </div>
               </div>
 
@@ -365,9 +431,8 @@ function ProfilePage() {
                 />
               </div>
 
-            {/* Results placeholder */}
             {!simulationResult && (
-              <div className="mt-4 p-10 flex justify-center items-center bg-zinc-950 border border-white/5 rounded-2xl">
+              <div className="mt-4 p-10 flex justify-center items-center bg-zinc-900/60 border border-white/10 rounded-2xl shadow-inner">
                 <span className="text-sm font-bold text-zinc-600">Select a valid Gym and Stat to simulate</span>
               </div>
             )}
@@ -376,7 +441,7 @@ function ProfilePage() {
 
         {/* Timeline Container - Full Width */}
         {currentConfig && (
-          <div className="mt-8">
+          <div className="mt-2">
             <JumpTimeline 
               config={currentConfig} 
               maxEnergy={data?.energy?.maximum || 150}
@@ -391,87 +456,106 @@ function ProfilePage() {
         )}
 
         {/* Perks Section */}
-        <div className="mt-8 bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col gap-6 w-full">
-          <h2 className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.2em]">Active Perks & Modifiers</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="mt-8 bg-zinc-900/65 border border-white/10 p-6 rounded-2xl flex flex-col gap-6 w-full shadow-lg">
+          <button 
+            onClick={() => setPerksCollapsed(!perksCollapsed)}
+            className="flex items-center justify-between w-full text-left focus:outline-none group"
+          >
+            <h2 className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
+              <span className="w-1.5 h-3 bg-indigo-500 rounded-full animate-pulse" />
+              Active Perks & Modifiers
+            </h2>
+            <svg 
+              className={`w-4 h-4 text-zinc-500 group-hover:text-indigo-400 transition-transform duration-300 ${!perksCollapsed ? 'rotate-180' : ''}`} 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {!perksCollapsed && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-3 duration-300">
 
-            {/* Gym Perks */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Gym Training Phase</h3>
-              </div>
+              {/* Gym Perks */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">Gym Training Phase</h3>
+                </div>
 
-              {/* Gym Summary Box */}
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                {['strength', 'speed', 'defense', 'dexterity'].map(stat => (
-                  <div key={stat} className="bg-cyan-500/10 border border-cyan-500/20 p-2 rounded-lg flex justify-between items-center">
-                    <span className="text-[9px] text-cyan-400 uppercase font-bold">{stat.substring(0, 3)}</span>
-                    <span className="text-xs font-mono text-white">x{(multipliers?.[stat as 'strength' | 'speed' | 'defense' | 'dexterity'] || 1).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-2">
-                {perkCategories.gym.map((p: any, i: number) => (
-                  <div key={i} className="bg-zinc-950 p-3 rounded-xl border border-white/5 flex flex-col">
-                    <span className="text-[9px] text-cyan-500 font-bold mb-1">{p.source}</span>
-                    <span className="text-xs text-zinc-300 font-medium">{p.text}</span>
-                  </div>
-                ))}
-                {perkCategories.gym.length === 0 && <span className="text-xs text-zinc-600">No active gym perks.</span>}
-              </div>
-            </div>
-
-            {/* Combat Perks */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Combat Stats Phase</h3>
-              </div>
-
-              {/* Combat Summary Box */}
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                {['strength', 'speed', 'defense', 'dexterity'].map(stat => {
-                  const val = data?.battlestats?.[`${stat}_modifier`] || 0;
-                  return (
-                    <div key={stat} className="bg-rose-500/10 border border-rose-500/20 p-2 rounded-lg flex justify-between items-center">
-                      <span className="text-[9px] text-rose-400 uppercase font-bold">{stat.substring(0, 3)}</span>
-                      <span className="text-xs font-mono text-white">{val > 0 ? '+' : ''}{val}%</span>
+                {/* Gym Summary Box */}
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {['strength', 'speed', 'defense', 'dexterity'].map(stat => (
+                    <div key={stat} className="bg-cyan-500/10 border border-cyan-500/20 p-2 rounded-lg flex justify-between items-center">
+                      <span className="text-[9px] text-cyan-400 uppercase font-bold">{stat.substring(0, 3)}</span>
+                      <span className="text-xs font-mono text-white">x{(multipliers?.[stat as 'strength' | 'speed' | 'defense' | 'dexterity'] || 1).toFixed(2)}</span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {perkCategories.gym.map((p: any, i: number) => (
+                    <div key={i} className="bg-zinc-900/50 p-3 rounded-xl border border-white/10 hover:border-white/20 transition-all flex flex-col shadow-inner">
+                      <span className="text-[9px] text-cyan-500 font-bold mb-1">{p.source}</span>
+                      <span className="text-xs text-zinc-300 font-medium">{p.text}</span>
+                    </div>
+                  ))}
+                  {perkCategories.gym.length === 0 && <span className="text-xs text-zinc-600">No active gym perks.</span>}
+                </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                {perkCategories.passive.map((p: any, i: number) => (
-                  <div key={i} className="bg-zinc-950 p-3 rounded-xl border border-white/5 flex flex-col">
-                    <span className="text-[9px] text-rose-500 font-bold mb-1">{p.source}</span>
-                    <span className="text-xs text-zinc-300 font-medium">{p.text}</span>
-                  </div>
-                ))}
-                {perkCategories.passive.length === 0 && <span className="text-xs text-zinc-600">No active combat perks.</span>}
+              {/* Combat Perks */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">Combat Stats Phase</h3>
+                </div>
+
+                {/* Combat Summary Box */}
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {['strength', 'speed', 'defense', 'dexterity'].map(stat => {
+                    const val = data?.battlestats?.[`${stat}_modifier`] || 0;
+                    return (
+                      <div key={stat} className="bg-rose-500/10 border border-rose-500/20 p-2 rounded-lg flex justify-between items-center">
+                        <span className="text-[9px] text-rose-400 uppercase font-bold">{stat.substring(0, 3)}</span>
+                        <span className="text-xs font-mono text-white">{val > 0 ? '+' : ''}{val}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {perkCategories.passive.map((p: any, i: number) => (
+                    <div key={i} className="bg-zinc-900/50 p-3 rounded-xl border border-white/10 hover:border-white/20 transition-all flex flex-col shadow-inner">
+                      <span className="text-[9px] text-rose-500 font-bold mb-1">{p.source}</span>
+                      <span className="text-xs text-zinc-300 font-medium">{p.text}</span>
+                    </div>
+                  ))}
+                  {perkCategories.passive.length === 0 && <span className="text-xs text-zinc-600">No active combat perks.</span>}
+                </div>
               </div>
+
+              {/* Utility Perks */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">Utility & Other</h3>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {perkCategories.other.map((p: any, i: number) => (
+                    <div key={i} className="bg-zinc-900/50 p-3 rounded-xl border border-white/10 hover:border-white/20 transition-all flex flex-col shadow-inner">
+                      <span className="text-[9px] text-emerald-500 font-bold mb-1">{p.source}</span>
+                      <span className="text-xs text-zinc-300 font-medium">{p.text}</span>
+                    </div>
+                  ))}
+                  {perkCategories.other.length === 0 && <span className="text-xs text-zinc-600">No other active perks.</span>}
+                </div>
+              </div>
+
             </div>
-
-            {/* Utility Perks */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Utility & Other</h3>
-              </div>
-              <div className="flex flex-col gap-2">
-                {perkCategories.other.map((p: any, i: number) => (
-                  <div key={i} className="bg-zinc-950 p-3 rounded-xl border border-white/5 flex flex-col">
-                    <span className="text-[9px] text-emerald-500 font-bold mb-1">{p.source}</span>
-                    <span className="text-xs text-zinc-300 font-medium">{p.text}</span>
-                  </div>
-                ))}
-                {perkCategories.other.length === 0 && <span className="text-xs text-zinc-600">No other active perks.</span>}
-              </div>
-            </div>
-
-          </div>
+          )}
         </div>
         </div>
         </div>

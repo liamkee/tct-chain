@@ -196,6 +196,12 @@ auth.post('/bind', async (c) => {
     return c.json({ error: 'You must be in a faction to use this tool' }, 400)
   }
 
+  // Restrict to our faction members only
+  const targetFactionId = c.env.FACTION_ID;
+  if (!targetFactionId || factionId.toString() !== targetFactionId.toString()) {
+    return c.json({ error: 'Forbidden: This tool is restricted to authorized faction members only' }, 403)
+  }
+
   // Detect Role: Leaders and Co-leaders are automatically admins
   const position = tornData.faction?.position || ''
   const isLeader = position === 'Leader' || position === 'Co-leader'

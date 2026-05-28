@@ -29,7 +29,7 @@ export function JumpBuilder({ baseEnergy, baseHappy, maxEnergy, currentStat, gym
     tootsie: 0,
     lollipop: 0,
     ecstasy: 0,
-    sleepHours: 8
+    sleepHours: 0
   });
 
   const result = useMemo(() => {
@@ -135,11 +135,16 @@ export function JumpBuilder({ baseEnergy, baseHappy, maxEnergy, currentStat, gym
         key === 'refill' ? 'bg-yellow-500' :
           key === 'fhc' ? 'bg-amber-500' : 'bg-cyan-500';
 
+    const cleanName = label.includes('(') ? label.split('(')[0].trim() : label;
+
     return (
       <div className="flex justify-between items-center bg-zinc-900/60 p-1.5 px-3 rounded-xl border border-white/10 shadow-lg hover:border-white/20 hover:bg-zinc-900/80 transition-all duration-200">
         <div className="flex items-center gap-2 overflow-hidden">
           <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor} opacity-60`} />
-          <span className="text-[9px] font-bold uppercase text-zinc-400 truncate" title={label}>{label}</span>
+          <span className="text-[9px] font-bold uppercase text-zinc-400 truncate" title={label}>
+            <span className="inline sm:hidden">{cleanName}</span>
+            <span className="hidden sm:inline">{label}</span>
+          </span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
@@ -164,7 +169,7 @@ export function JumpBuilder({ baseEnergy, baseHappy, maxEnergy, currentStat, gym
     <div className="flex flex-col gap-4">
       {/* Presets */}
       <div className="flex flex-col gap-2">
-        <label className="text-[10px] text-zinc-400 font-bold uppercase">Load Preset Configuration</label>
+        <label className="text-[10px] text-zinc-400 font-bold uppercase">Load Preset</label>
         <CustomSelect
           value={presetMode}
           onChange={(val) => {
@@ -190,24 +195,6 @@ export function JumpBuilder({ baseEnergy, baseHappy, maxEnergy, currentStat, gym
               {renderCounter('Ecstasy (x2 Happy)', ITEM_PRICES.ECSTASY, 'ecstasy', 1)}
               {renderCounter('Point Refill', ITEM_PRICES.POINT * 25, 'refill', 1)}
               {renderCounter('FHC (+500 Happy)', ITEM_PRICES.FHC, 'fhc')}
-
-              <div className="col-span-2 flex justify-between items-center bg-indigo-950/20 p-1.5 px-3 rounded-xl border border-indigo-500/40 shadow-lg hover:border-indigo-500/50 hover:bg-indigo-950/30 transition-all duration-200">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500 opacity-60" />
-                  <span className="text-[9px] font-bold uppercase text-indigo-400">Sleep Schedule</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => updateItem('sleepHours', -1)}
-                    className="w-5 h-5 flex justify-center items-center rounded bg-white/5 hover:bg-indigo-500/20 text-white transition-colors text-xs"
-                  >-</button>
-                  <span className="font-mono text-xs w-6 text-center text-indigo-300">{config.sleepHours}h</span>
-                  <button
-                    onClick={() => updateItem('sleepHours', 1)}
-                    className="w-5 h-5 flex justify-center items-center rounded bg-white/5 hover:bg-indigo-500/20 text-white transition-colors text-xs"
-                  >+</button>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -223,10 +210,10 @@ export function JumpBuilder({ baseEnergy, baseHappy, maxEnergy, currentStat, gym
         </div>
 
         {/* Results Panel */}
-        <div className="bg-zinc-950 rounded-2xl border border-white/5 p-4 flex flex-col gap-4">
-          <div className="flex justify-between items-center pb-3 border-b border-white/5">
-            <span className="text-[10px] font-bold uppercase text-zinc-500">Total Cost</span>
-            <span className="font-mono text-sm text-yellow-500">${(totalCost / 1000000).toFixed(2)}M</span>
+        <div className="bg-zinc-900 rounded-2xl border border-white/10 p-4 flex flex-col gap-4 shadow-xl">
+          <div className="flex justify-between items-center pb-3 border-b border-white/10">
+            <span className="text-[10px] font-black uppercase text-zinc-200 tracking-wider">Total Cost</span>
+            <span className="font-mono text-base font-black text-amber-200 drop-shadow-[0_0_10px_rgba(252,211,77,0.4)]">${(totalCost / 1000000).toFixed(2)}M</span>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
