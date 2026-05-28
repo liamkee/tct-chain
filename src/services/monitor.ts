@@ -501,6 +501,30 @@ export class ChainMonitor implements DurableObject {
         const storageUpdates: Record<string, any> = {};
         let hasChanges = false;
 
+        // Cleanup stale members who are no longer in the faction
+        if (Object.keys(membersData).length > 0) {
+          const keysToDelete: string[] = [];
+          for (const id of this.memberDataCache.keys()) {
+            if (!membersData[id]) {
+              keysToDelete.push(id);
+            }
+          }
+          if (keysToDelete.length > 0) {
+            console.log(`[DO] Cleanup: Removing ${keysToDelete.length} stale members who left the faction: ${keysToDelete.join(', ')}`);
+            this.microLogs.push({ ts: Date.now(), msg: `DO Cleanup: Removed ${keysToDelete.length} stale members` });
+            while (this.microLogs.length > 20) this.microLogs.shift();
+
+            for (const id of keysToDelete) {
+              this.memberDataCache.delete(id);
+              this.memberStatusCache.delete(id);
+              this.memberMinutesCache.delete(id);
+              this.pendingPolls.delete(id);
+              await this.state.storage.delete(`member_${id}`);
+            }
+            hasChanges = true;
+          }
+        }
+
         // Process Ranked Wars
         const activeWarIds = Object.keys(rankedWarsData);
         if (activeWarIds.length > 0) {
@@ -588,7 +612,40 @@ export class ChainMonitor implements DurableObject {
               if (Date.now() - lastPoll >= throttleMs) {
                 const fetchStats = true; // FORCE FETCH STATS
                 batch.push({
-                  body: { tornId: id, apiKey, factionId: this.factionId, ts: Date.now(), fetchStats }
+                  body: { 
+                    tornId: id, 
+                    apiKey, 
+                    factionId: this.factionId, 
+                    ts: Date.now(), 
+                    fetchStats,
+                    existingRealStats: existing?.real_stats,
+                    existingRealStatsUpdated: existing?.real_stats_updated,
+                    existingRealStatsSource: existing?.real_stats_source
+                  }
+                });
+                this.pendingPolls.set(id, Date.now());
+              }
+            }
+          } else if (!apiKey) {
+            // Member has no API key, let's still poll FFScouter stats if missing or older than 12 hours
+            const isInitial = !existing || !existing.real_stats;
+            const isStale = !existing || !existing.real_stats_updated || (Date.now() - (existing.real_stats_updated || 0) > 12 * 60 * 60 * 1000);
+
+            if (isInitial || isStale) {
+              const lastPoll = this.pendingPolls.get(id) || 0;
+              // Throttle to 30 minutes to avoid spamming
+              if (Date.now() - lastPoll >= 1800000) {
+                batch.push({
+                  body: {
+                    tornId: id,
+                    apiKey: null, // No key
+                    factionId: this.factionId,
+                    ts: Date.now(),
+                    fetchStats: true,
+                    existingRealStats: existing?.real_stats,
+                    existingRealStatsUpdated: existing?.real_stats_updated,
+                    existingRealStatsSource: existing?.real_stats_source
+                  }
                 });
                 this.pendingPolls.set(id, Date.now());
               }
@@ -746,30 +803,6 @@ export class ChainMonitor implements DurableObject {
       this.dbMembersCache = dbResult.results as any[];
       this.lastDbMembersTs = nowTs;
       console.log(`[DO] DB Sync: Found ${this.dbMembersCache.length} members for faction ${this.factionId}`);
-
-      // Cleanup stale members who are no longer in the DB Faction list
-      const activeIds = new Set(this.dbMembersCache.map(m => m.torn_id.toString()));
-      const keysToDelete: string[] = [];
-
-      for (const id of this.memberDataCache.keys()) {
-        if (!activeIds.has(id)) {
-          keysToDelete.push(id);
-        }
-      }
-
-      if (keysToDelete.length > 0) {
-        console.log(`[DO] Cleanup: Removing ${keysToDelete.length} stale members from storage: ${keysToDelete.join(', ')}`);
-        this.microLogs.push({ ts: Date.now(), msg: `DO Cleanup: Removed ${keysToDelete.length} stale members` });
-        while (this.microLogs.length > 20) this.microLogs.shift();
-
-        for (const id of keysToDelete) {
-          this.memberDataCache.delete(id);
-          this.memberStatusCache.delete(id);
-          this.memberMinutesCache.delete(id);
-          this.pendingPolls.delete(id);
-          await this.state.storage.delete(`member_${id}`);
-        }
-      }
     }
   }
 

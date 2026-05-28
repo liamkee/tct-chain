@@ -20,6 +20,7 @@ export type Env = {
     FACTION_ID: string;
     DISCORD_PUBLIC_KEY: string;
     ALERTS_WEBHOOK_URL: string;
+    FFSCOUTER_API_KEY?: string;
     ANALYTICS?: AnalyticsEngineDataset;
   },
   Variables: {

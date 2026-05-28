@@ -68,7 +68,8 @@ profile.get('/gym-data', async (c) => {
               last_updated: Math.floor(Date.now() / 1000),
               api_key_invalid: false,
               real_stats: real_stats,
-              real_stats_updated: Date.now()
+              real_stats_updated: Date.now(),
+              real_stats_source: 'torn'
             }
           }])
         });

@@ -13,6 +13,7 @@ interface MemberData {
   last_updated?: number;
   real_stats?: number;
   real_stats_updated?: number;
+  real_stats_source?: 'torn' | 'ffscouter';
   is_pending?: boolean;
   has_api?: boolean;
   energy_predicted?: boolean;
@@ -137,6 +138,13 @@ export const useDashboardStore = create<DashboardState>((set) => ({
 
         cooldowns: memberData.cooldowns || { drug: 0, medical: 0, booster: 0 },
         last_updated: memberData.last_updated,
+        real_stats: memberData.real_stats,
+        real_stats_updated: memberData.real_stats_updated,
+        real_stats_source: memberData.real_stats_source,
+        has_api: memberData.has_api,
+        energy_predicted: memberData.energy_predicted,
+        api_key_invalid: memberData.api_key_invalid,
+        is_pending: memberData.is_pending,
       };
     });
 

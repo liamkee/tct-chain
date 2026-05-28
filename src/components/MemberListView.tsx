@@ -239,9 +239,22 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
             <span className="text-[9px] text-zinc-600 font-mono tabular-nums">#{member.id}</span>
             {/* Mobile Stats */}
             {member.real_stats && (
-              <span className="md:hidden text-[9px] text-indigo-400/70 font-mono tracking-tighter">
-                {member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()}
-              </span>
+              member.real_stats_source === 'ffscouter' ? (
+                <span 
+                  className="md:hidden text-[9px] text-amber-400/80 font-mono tracking-tighter border-b border-dashed border-amber-500/30" 
+                  title="Estimated by FFScouter (API key access level is too low)"
+                >
+                  {member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()}
+                  <span className="text-[7px] text-amber-500 font-bold ml-0.5">ff</span>
+                </span>
+              ) : (
+                <span 
+                  className="md:hidden text-[9px] text-indigo-400/70 font-mono tracking-tighter"
+                  title="Direct API Verified Stats"
+                >
+                  {member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()}
+                </span>
+              )
             )}
           </div>
         </div>
@@ -250,11 +263,20 @@ const MemberRow: React.FC<{ member: any, isSelected: boolean, resetTimer: string
       {/* Stats */}
       <div className="hidden md:flex w-[100px] shrink-0 flex-col items-center justify-center">
         {member.real_stats ? (
-           <div className="flex items-center gap-1 shrink-0" title="Real Stats">
-             <span className="text-[11px] text-indigo-300 font-mono font-black tracking-tighter">
-               {member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()}
-             </span>
-           </div>
+           member.real_stats_source === 'ffscouter' ? (
+             <div className="flex items-center gap-0.5 shrink-0" title="Estimated by FFScouter (API key access level is too low for direct query)">
+               <span className="text-[11px] text-amber-400/90 font-mono font-black tracking-tighter border-b border-dashed border-amber-500/40">
+                 {member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()}
+               </span>
+               <span className="text-[8px] bg-amber-500/10 text-amber-500/80 px-0.5 py-0.2 rounded border border-amber-500/20 font-black ml-1 scale-90" style={{ transform: 'scale(0.85)' }}>FF</span>
+             </div>
+           ) : (
+             <div className="flex items-center gap-1 shrink-0" title="Direct API Verified Stats">
+               <span className="text-[11px] text-indigo-300 font-mono font-black tracking-tighter">
+                 {member.real_stats >= 1000000000 ? `${(member.real_stats / 1000000000).toFixed(1)}b` : member.real_stats >= 1000000 ? `${(member.real_stats / 1000000).toFixed(1)}m` : member.real_stats >= 1000 ? `${(member.real_stats / 1000).toFixed(1)}k` : member.real_stats.toLocaleString()}
+               </span>
+             </div>
+           )
         ) : (
            <span className="text-[11px] text-zinc-700 font-mono font-black tracking-tighter" title="Requires Limited Access Key">--</span>
         )}
