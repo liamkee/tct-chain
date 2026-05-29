@@ -35,6 +35,7 @@ export class ChainMonitor implements DurableObject {
     excludeFHC: false,
     excludeRefill: false
   };
+  private chainTarget: number = 100;
   
   
 
@@ -51,12 +52,14 @@ export class ChainMonitor implements DurableObject {
         'manual_offset',
         'master_switch',
         'calc_settings',
+        'chain_target',
       ]);
 
       const storedMap = stored as Map<string, any>;
       this.factionId = storedMap.get('faction_id') ?? null;
       this.manualOffset = storedMap.get('manual_offset') ?? 0;
       this.masterSwitch = storedMap.get('master_switch') ?? 'OFF';
+      this.chainTarget = storedMap.get('chain_target') ?? 100;
       const defaultSettings = { 
         excludeXanax: false, 
         excludeFHC: false, 
@@ -271,12 +274,18 @@ export class ChainMonitor implements DurableObject {
           this.memberDataCache.set(stringId, newData);
 
           // 2. 只有关键变化才立即存盘，否则只更新内存
-          // 关键变化：状态改变、能量大幅波动(>20)、API key 有效状态改变、或者距离上次存盘超过 5 分钟
-          const isCritical = !oldData ||
+          // 关键变化：状态改变、能量大幅波动(>20)、冷却时间大幅改变(吃药/用助推器等)、API key 有效状态改变
+          const oldCd = oldData.cooldowns || { drug: 0, medical: 0, booster: 0 };
+          const newCd = newData.cooldowns || { drug: 0, medical: 0, booster: 0 };
+          const cdChanged = Math.abs(oldCd.drug - newCd.drug) > 300 ||
+            Math.abs(oldCd.booster - newCd.booster) > 300 ||
+            Math.abs(oldCd.medical - newCd.medical) > 300;
+
+          const isCritical = !oldData || Object.keys(oldData).length === 0 ||
             oldData.status?.state !== newData.status?.state ||
             oldData.api_key_invalid !== newData.api_key_invalid ||
             Math.abs((oldData.energy || 0) - (newData.energy || 0)) > 20 ||
-            Date.now() - this.lastPersistenceTs > 300000;
+            cdChanged;
 
           if (isCritical) {
             // Store entire member as 1 key (not per-field)
@@ -287,7 +296,6 @@ export class ChainMonitor implements DurableObject {
 
         if (needsStoragePut) {
           await this.state.storage.put(storageUpdates);
-          this.lastPersistenceTs = Date.now();
         }
         return new Response('OK');
       }
@@ -383,6 +391,12 @@ export class ChainMonitor implements DurableObject {
         const snapshot = await this.getFullSnapshot();
         this.broadcastToWebSockets({ type: 'HEARTBEAT', data: snapshot });
       }
+      if (data.type === 'UPDATE_CHAIN_TARGET') {
+        this.chainTarget = data.target || 100;
+        await this.state.storage.put('chain_target', this.chainTarget);
+        const snapshot = await this.getFullSnapshot();
+        this.broadcastToWebSockets({ type: 'HEARTBEAT', data: snapshot });
+      }
       if (data.type === 'REQ_SYNC') {
         console.log('[DO] Manual Sync Requested');
         this.microLogs.push({ ts: Date.now(), msg: 'Manual Sync Requested by Admin' });
@@ -405,8 +419,8 @@ export class ChainMonitor implements DurableObject {
     // Use the prediction engine to get the latest state of all 40 members
     const predicted = this.getMembersWithPrediction();
 
-    // Get target from storage (default to 100 if not set)
-    const chainTarget = await this.state.storage.get<number>('chain_target') || 100;
+    // Get target from memory cache
+    const chainTarget = this.chainTarget;
 
     // --- HPM & Metrics ---
     let currentHPM = 0;
@@ -554,7 +568,6 @@ export class ChainMonitor implements DurableObject {
                  this.hpmHistory.shift();
                }
             }
-            hasChanges = true;
           }
 
           if (current !== this.lastChainCurrent || timeout !== this.lastChainTimeout) {
@@ -596,15 +609,26 @@ export class ChainMonitor implements DurableObject {
             let shouldPoll = false;
             let throttleMs = 600000; // default 10 minutes
 
-            if (isInitial || statusChanged || actionStatusChanged) {
-              shouldPoll = true;
-              throttleMs = 60000; // 1 min throttle for critical state changes
-            } else if (actionTimestampChanged) {
-              shouldPoll = true;
-              throttleMs = 600000; // 10 min throttle for just routine activity
-            } else if (isStale) {
-              shouldPoll = true;
-              throttleMs = 1800000; // 30 min throttle for idle staleness
+            const isOffline = m.last_action?.status === 'Offline';
+
+            if (isOffline) {
+              // 🚀 Offline members never get polled aggressively! Throttle is at least 30 minutes
+              if (isInitial || isStale) {
+                shouldPoll = true;
+                throttleMs = 1800000;
+              }
+            } else {
+              // Online or Idle members maintain responsive polling strategies
+              if (isInitial || statusChanged || actionStatusChanged) {
+                shouldPoll = true;
+                throttleMs = 60000; // 1 min throttle for critical state changes
+              } else if (actionTimestampChanged) {
+                shouldPoll = true;
+                throttleMs = 600000; // 10 min throttle for just routine activity
+              } else if (isStale) {
+                shouldPoll = true;
+                throttleMs = 1800000; // 30 min throttle for idle staleness
+              }
             }
 
             if (shouldPoll) {
@@ -655,9 +679,7 @@ export class ChainMonitor implements DurableObject {
           const currentStatusStr = `${m.status?.state}_${m.last_action?.status}`;
           const needsPersist = !existing || !existing.name ||
             existing.status?.state !== m.status?.state ||
-            existing.status?.until !== m.status?.until ||
-            existing.last_action?.status !== m.last_action?.status ||
-            existing.last_action?.timestamp !== m.last_action?.timestamp;
+            existing.status?.until !== m.status?.until;
 
           const merged = {
             ...(existing || {}),
