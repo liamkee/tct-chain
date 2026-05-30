@@ -87,9 +87,17 @@ export const checkMasterSwitch = async (c: any, next: any) => {
 
 api.get('/health', checkMasterSwitch, async (c) => {
   try {
-    // 1. Test KV
-    await c.env.TCT_CACHE.put('ping', 'pong');
-    const kvTest = await c.env.TCT_CACHE.get('ping');
+    // 1. Test KV (Read-only by default to conserve daily 1,000 write operations quota)
+    let kvTest = 'Passed ✅';
+    if (c.req.query('testKV') === 'true') {
+      await c.env.TCT_CACHE.put('ping', 'pong');
+      const val = await c.env.TCT_CACHE.get('ping');
+      kvTest = val === 'pong' ? 'Passed (Write/Read) ✅' : 'Failed ❌';
+    } else {
+      // Warm up / check binding capability with a safe GET
+      await c.env.TCT_CACHE.get('ping');
+      kvTest = 'Passed (Read Only) ✅';
+    }
 
     // 2. Test D1
     const db = drizzle(c.env.DB);
@@ -105,7 +113,7 @@ api.get('/health', checkMasterSwitch, async (c) => {
       status: 'ok',
       timestamp: new Date().toISOString(),
       tests: {
-        kv: kvTest === 'pong' ? 'Passed ✅' : 'Failed ❌',
+        kv: kvTest,
         db: Array.isArray(dbTest) ? 'Passed ✅' : 'Failed ❌',
         queue: queueExists ? 'Passed ✅' : 'Failed ❌'
       }

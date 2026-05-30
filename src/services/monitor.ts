@@ -2,6 +2,8 @@
 import type { Env } from '../index'
 import { DiscordWebhookService } from './discord_webhook'
 import { TacticalCalculator } from './calculator'
+import { ApiManager } from './api_manager'
+import { SecurityService } from './security'
 
 export class ChainMonitor implements DurableObject {
   private state: DurableObjectState;
@@ -161,9 +163,13 @@ export class ChainMonitor implements DurableObject {
       this.masterSwitch = state;
       console.log(`[DO] Master Switch toggled to: ${state}`);
 
-      // 🚀 NEW: Sync state to KV for Queue Consumer and Edge Middleware
+      // 🚀 NEW: Sync state to KV for Queue Consumer and Edge Middleware (Resilient to KV write limits)
       if (this.env.TCT_KV) {
-        await this.env.TCT_KV.put('SYSTEM_MASTER_SWITCH', state);
+        try {
+          await this.env.TCT_KV.put('SYSTEM_MASTER_SWITCH', state);
+        } catch (e: any) {
+          console.warn(`[DO] KV master switch sync failed (likely daily limit exceeded), proceeding: ${e.message}`);
+        }
       }
 
       if (state === 'ON') {
@@ -698,8 +704,15 @@ export class ChainMonitor implements DurableObject {
         }
 
         if (batch.length > 0) {
-          await this.env.MEMBER_QUEUE.sendBatch(batch);
-          console.log(`[DO] Queued ${batch.length} member polls.`);
+          try {
+            await this.env.MEMBER_QUEUE.sendBatch(batch);
+            console.log(`[DO] Queued ${batch.length} member polls.`);
+          } catch (queueErr: any) {
+            console.warn(`[DO] Queue send failed (likely daily limit exceeded), running polls directly: ${queueErr.message}`);
+            this.microLogs.push({ ts: Date.now(), msg: '⚠️ Cloudflare Queues limit exceeded. Running polls directly.' });
+            if (this.microLogs.length > 20) this.microLogs.shift();
+            await this.processDirectPolls(batch);
+          }
         }
 
         // 7. Persistence
@@ -814,6 +827,258 @@ export class ChainMonitor implements DurableObject {
     }
 
     return { members, predictedCount };
+  }
+
+  private async processDirectPolls(batch: any[]) {
+    if (batch.length === 0) return;
+
+    console.log(`[DO] Processing ${batch.length} member polls directly (Bypassing Queue)...`);
+    const apiManager = new ApiManager(this.env);
+    const security = new SecurityService(this.env.ENCRYPTION_SECRET);
+
+    // Group by API key to apply rate limits
+    const keysCount: Record<string, number> = {};
+    for (const msg of batch) {
+      if (msg.body.apiKey) {
+        keysCount[msg.body.apiKey] = (keysCount[msg.body.apiKey] || 0) + 1;
+      }
+    }
+
+    // Check rate limits in-memory
+    const keyTokens: Record<string, boolean> = {};
+    const now = Date.now();
+    for (const [key, count] of Object.entries(keysCount)) {
+      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+      const hashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+      const bucketKey = `token_${hashHex}`;
+
+      let bucket = this.tokenBuckets.get(bucketKey) || { tokens: 90, resetAt: now + 60000 };
+      if (now > bucket.resetAt) {
+        bucket = { tokens: 90, resetAt: now + 60000 };
+      }
+
+      if (bucket.tokens >= count) {
+        bucket.tokens -= count;
+        this.tokenBuckets.set(bucketKey, bucket);
+        keyTokens[key] = true;
+      } else {
+        keyTokens[key] = false;
+        console.warn(`[DO Limit] Rate limit hit for API Key (hash: ${hashHex.substring(0, 8)}). Skipping in this cycle.`);
+      }
+    }
+
+    const updatesBatch: any[] = [];
+    const logBatch: string[] = [];
+
+    // Process all polls concurrently using Promise.allSettled
+    await Promise.allSettled(batch.map(async (msg) => {
+      const { 
+        tornId, 
+        apiKey, 
+        fetchStats,
+        existingRealStats,
+        existingRealStatsUpdated,
+        existingRealStatsSource
+      } = msg.body;
+
+      if (!tornId) return;
+
+      if (apiKey && !keyTokens[apiKey]) {
+        // Rate limited, skip this poll
+        return;
+      }
+
+      let rawApiKey = apiKey;
+      if (apiKey && apiKey.includes(':')) {
+         const decrypted = await security.decrypt(apiKey);
+         if (decrypted) rawApiKey = decrypted;
+      }
+
+      try {
+        let selections = 'bars,cooldowns,refills';
+        if (fetchStats) selections += ',battlestats';
+
+        let data: any = {};
+
+        if (rawApiKey) {
+          let res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${rawApiKey}`);
+          data = await res.json() as any;
+          
+          if (data.error && data.error.code === 16 && fetchStats) {
+             selections = 'bars,cooldowns,refills';
+             res = await apiManager.fetchWithBackoff(`https://api.torn.com/user/?selections=${selections}&key=${rawApiKey}`);
+             data = await res.json() as any;
+          }
+
+          if (data.error) {
+            const errorCode = data.error.code;
+            const isPermanentKeyError = [1, 2, 3, 10, 13, 16, 18].includes(errorCode);
+
+            if (isPermanentKeyError) {
+               console.warn(`[DO] Permanent API Key Error (Code ${errorCode}) for member ${tornId}`);
+               updatesBatch.push({
+                  id: tornId.toString(),
+                  updates: {
+                     api_key_invalid: true,
+                     last_failed_key: apiKey
+                  }
+               });
+               logBatch.push(`[ERROR] Member [${tornId}] API key invalid (Code ${errorCode}): ${data.error.error}`);
+               return;
+            } else {
+               throw new Error(`Torn Error (Code ${errorCode}): ${data.error.error}`);
+            }
+          }
+        }
+
+        const updates: any = {
+          id: tornId.toString()
+        };
+
+        if (rawApiKey && data.name) {
+          const energyMax = data.energy?.maximum || 100;
+          const isDonator = energyMax > 100;
+
+          updates.name = data.name;
+          updates.energy = data.energy?.current;
+          updates.energy_max = data.energy?.maximum || (isDonator ? 150 : 100);
+          updates.cooldowns = data.cooldowns;
+          updates.refill_used = data.refills ? !!data.refills.energy_refill_used : false;
+          updates.last_updated = Math.floor(Date.now() / 1000);
+          updates.api_key_invalid = false;
+        }
+
+        let realStats = undefined;
+        let realStatsUpdated = undefined;
+        let realStatsSource = undefined;
+
+        if (data.strength !== undefined) {
+          realStats = Math.floor(
+            (data.strength || 0) * (1 + (data.strength_modifier || 0) / 100) +
+            (data.defense || 0) * (1 + (data.defense_modifier || 0) / 100) +
+            (data.speed || 0) * (1 + (data.speed_modifier || 0) / 100) +
+            (data.dexterity || 0) * (1 + (data.dexterity_modifier || 0) / 100)
+          );
+          realStatsUpdated = Date.now();
+          realStatsSource = 'torn';
+        } else if (fetchStats) {
+          const isTornSource = existingRealStatsSource === 'torn';
+          const isFresh = existingRealStatsUpdated && (Date.now() - existingRealStatsUpdated < 12 * 60 * 60 * 1000);
+
+          if (isTornSource) {
+            realStats = existingRealStats;
+            realStatsUpdated = existingRealStatsUpdated;
+            realStatsSource = 'torn';
+          } else if (isFresh) {
+            realStats = existingRealStats;
+            realStatsUpdated = existingRealStatsUpdated;
+            realStatsSource = 'ffscouter';
+          } else {
+            const ffscouterApiKey = this.env.FFSCOUTER_API_KEY || 'ptlgbJYXcXtqtPlO';
+            try {
+              const ffRes = await apiManager.fetchWithBackoff(
+                `https://ffscouter.com/api/v1/get-stats?key=${ffscouterApiKey}&targets=${tornId}`
+              );
+              if (ffRes.ok) {
+                const ffData = await ffRes.json() as any[];
+                if (ffData && ffData[0] && ffData[0].bs_estimate) {
+                  realStats = ffData[0].bs_estimate;
+                  realStatsUpdated = Date.now();
+                  realStatsSource = 'ffscouter';
+                } else {
+                  realStats = existingRealStats;
+                  realStatsUpdated = existingRealStatsUpdated || Date.now();
+                  realStatsSource = existingRealStatsSource || 'ffscouter';
+                }
+              } else {
+                realStats = existingRealStats;
+                realStatsUpdated = existingRealStatsUpdated || Date.now();
+                realStatsSource = existingRealStatsSource || 'ffscouter';
+              }
+            } catch (ffErr: any) {
+              realStats = existingRealStats;
+              realStatsUpdated = existingRealStatsUpdated || Date.now();
+              realStatsSource = existingRealStatsSource || 'ffscouter';
+            }
+          }
+        }
+
+        if (realStats !== undefined) {
+          updates.real_stats = realStats;
+          updates.real_stats_updated = realStatsUpdated;
+          updates.real_stats_source = realStatsSource;
+        }
+
+        updatesBatch.push({
+           id: tornId.toString(),
+           updates
+        });
+
+        logBatch.push(`Sync [${tornId}] ${data.name || 'Unknown'}: E:${data.energy?.current || 0} CD:${updates.cooldowns?.drug || 0}`);
+
+      } catch (err: any) {
+        console.error(`[DO] Direct poll error for ${tornId}:`, err);
+      }
+    }));
+
+    if (updatesBatch.length > 0) {
+      const storageUpdates: Record<string, any> = {};
+      let needsStoragePut = false;
+
+      for (const item of updatesBatch) {
+        const stringId = item.id.toString();
+        const oldData = this.memberDataCache.get(stringId) || {};
+
+        const successState = `${oldData.last_action?.timestamp || 0}_${oldData.status?.state || 'Unknown'}`;
+        const newData = {
+          ...oldData,
+          ...item.updates,
+          last_successful_state: successState
+        };
+
+        const hasChanged = JSON.stringify({ e: oldData.energy, c: oldData.cooldowns }) !==
+          JSON.stringify({ e: newData.energy, c: newData.cooldowns });
+
+        if (hasChanged) {
+          this.broadcastToWebSockets({
+            type: 'MEMBER_SOFT_UPDATE',
+            id: stringId,
+            data: newData
+          });
+        }
+
+        this.memberDataCache.set(stringId, newData);
+
+        const oldCd = oldData.cooldowns || { drug: 0, medical: 0, booster: 0 };
+        const newCd = newData.cooldowns || { drug: 0, medical: 0, booster: 0 };
+        const cdChanged = Math.abs(oldCd.drug - newCd.drug) > 300 ||
+          Math.abs(oldCd.booster - newCd.booster) > 300 ||
+          Math.abs(oldCd.medical - newCd.medical) > 300;
+
+        const isCritical = !oldData || Object.keys(oldData).length === 0 ||
+          oldData.status?.state !== newData.status?.state ||
+          oldData.api_key_invalid !== newData.api_key_invalid ||
+          Math.abs((oldData.energy || 0) - (newData.energy || 0)) > 20 ||
+          cdChanged;
+
+        if (isCritical) {
+          storageUpdates[`member_${stringId}`] = newData;
+          needsStoragePut = true;
+        }
+      }
+
+      if (needsStoragePut) {
+        await this.state.storage.put(storageUpdates);
+      }
+    }
+
+    if (logBatch.length > 0) {
+      for (const msg of logBatch) {
+        this.microLogs.push({ ts: Date.now(), msg });
+      }
+      while (this.microLogs.length > 20) this.microLogs.shift();
+      this.broadcastToWebSockets({ type: 'LOG_UPDATE', microLogs: this.microLogs, do_server_time_ms: Date.now() });
+    }
   }
 
   private async syncDbMembers() {
