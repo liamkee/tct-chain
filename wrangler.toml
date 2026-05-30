@@ -49,3 +49,10 @@ ALERTS_WEBHOOK_URL = ""
 
 [triggers]
 crons = ["*/1 * * * *"]
+
+[observability]
+enabled = true
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "tct-analytics"
