@@ -38,6 +38,7 @@ export class ChainMonitor implements DurableObject {
     excludeRefill: false
   };
   private chainTarget: number = 100;
+  private queueDisabledUntil: number = 0; // Timestamp until which queue is bypassed
   
   
 
@@ -357,7 +358,10 @@ export class ChainMonitor implements DurableObject {
     }
 
     if (url.pathname === '/internal/start') {
-      await this.state.storage.setAlarm(Date.now() + 100);
+      const currentAlarm = await this.state.storage.getAlarm();
+      if (currentAlarm === null) {
+        await this.state.storage.setAlarm(Date.now() + 100);
+      }
       await this.state.storage.put('master_switch', 'ON');
       this.masterSwitch = 'ON';
       this.microLogs.push({ ts: Date.now(), msg: 'Engine Manual Start: Polling initiated' });
@@ -704,14 +708,25 @@ export class ChainMonitor implements DurableObject {
         }
 
         if (batch.length > 0) {
-          try {
-            await this.env.MEMBER_QUEUE.sendBatch(batch);
-            console.log(`[DO] Queued ${batch.length} member polls.`);
-          } catch (queueErr: any) {
-            console.warn(`[DO] Queue send failed (likely daily limit exceeded), running polls directly: ${queueErr.message}`);
-            this.microLogs.push({ ts: Date.now(), msg: '⚠️ Cloudflare Queues limit exceeded. Running polls directly.' });
-            if (this.microLogs.length > 20) this.microLogs.shift();
+          const isQueueBypassed = this.env.BYPASS_QUEUE === 'true' || Date.now() < this.queueDisabledUntil;
+          if (isQueueBypassed) {
+            console.log(`[DO] Queue is temporarily or permanently bypassed. Running ${batch.length} polls directly.`);
             await this.processDirectPolls(batch);
+          } else {
+            try {
+              // Send all member polls bundled into a single Queue message
+              await this.env.MEMBER_QUEUE.send({
+                factionId: this.factionId,
+                polls: batch.map(m => m.body)
+              });
+              console.log(`[DO] Bundled and sent ${batch.length} member polls in a single Queue message.`);
+            } catch (queueErr: any) {
+              console.warn(`[DO] Queue send failed (likely daily limit exceeded), running polls directly: ${queueErr.message}`);
+              this.queueDisabledUntil = Date.now() + 3600000; // Bypass queue for 1 hour on failure
+              this.microLogs.push({ ts: Date.now(), msg: '⚠️ Cloudflare Queues limit exceeded. Running polls directly.' });
+              if (this.microLogs.length > 20) this.microLogs.shift();
+              await this.processDirectPolls(batch);
+            }
           }
         }
 

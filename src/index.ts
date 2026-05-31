@@ -22,6 +22,7 @@ export type Env = {
     ALERTS_WEBHOOK_URL: string;
     FFSCOUTER_API_KEY?: string;
     ANALYTICS?: AnalyticsEngineDataset;
+    BYPASS_QUEUE?: string;
   },
   Variables: {
     parsedBody: any;
