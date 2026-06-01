@@ -195,15 +195,22 @@ export async function consumer(batch: MessageBatch<any>, env: Env['Bindings']): 
           id: tornId.toString()
         };
 
-        if (rawApiKey && data.name) {
-          const energyMax = data.energy?.maximum || 100;
-          const isDonator = energyMax > 100;
-
-          updates.name = data.name;
-          updates.energy = data.energy?.current;
-          updates.energy_max = data.energy?.maximum || (isDonator ? 150 : 100);
-          updates.cooldowns = data.cooldowns;
-          updates.refill_used = data.refills ? !!data.refills.energy_refill_used : false;
+        if (rawApiKey && (data.energy !== undefined || data.cooldowns !== undefined || data.name)) {
+          if (data.name) {
+            updates.name = data.name;
+          }
+          if (data.energy) {
+            const energyMax = data.energy.maximum || 100;
+            const isDonator = energyMax > 100;
+            updates.energy = data.energy.current;
+            updates.energy_max = energyMax || (isDonator ? 150 : 100);
+          }
+          if (data.cooldowns) {
+            updates.cooldowns = data.cooldowns;
+          }
+          if (data.refills) {
+            updates.refill_used = !!data.refills.energy_refill_used;
+          }
           updates.last_updated = Math.floor(Date.now() / 1000);
           updates.api_key_invalid = false; // Reset flag on successful sync
         }
