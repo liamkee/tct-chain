@@ -1,6 +1,9 @@
 import { Hono } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { verify } from 'hono/jwt'
+import { drizzle } from 'drizzle-orm/d1'
+import { eq } from 'drizzle-orm'
+import { members } from '../db/schema'
 import type { Env } from '../index'
 
 const dashboard = new Hono<Env>()
@@ -55,15 +58,47 @@ dashboard.get('/clear', async (c) => {
 
 // Start engine (all logged-in users)
 dashboard.get('/start', async (c) => {
+  const payload = c.get('jwtPayload') as any
+  let operator = `Unknown (${payload?.torn_id})`
+  if (payload?.torn_id) {
+    try {
+      const db = drizzle(c.env.DB)
+      const member = await db.select().from(members).where(eq(members.torn_id, payload.torn_id)).limit(1)
+      if (member.length > 0) {
+        operator = `${member[0].name} (${payload.torn_id})`
+      }
+    } catch (e) {
+      console.error('[Dashboard API] Failed to fetch operator name:', e)
+    }
+  }
+
   const stub = getFactionDO(c)
-  await stub.fetch(new URL('/internal/start', c.req.url).toString())
+  const url = new URL('/internal/start', c.req.url)
+  url.searchParams.set('operator', operator)
+  await stub.fetch(url.toString())
   return c.text('Tactical Engine Started!')
 })
 
 // Stop engine (all logged-in users)
 dashboard.get('/stop', async (c) => {
+  const payload = c.get('jwtPayload') as any
+  let operator = `Unknown (${payload?.torn_id})`
+  if (payload?.torn_id) {
+    try {
+      const db = drizzle(c.env.DB)
+      const member = await db.select().from(members).where(eq(members.torn_id, payload.torn_id)).limit(1)
+      if (member.length > 0) {
+        operator = `${member[0].name} (${payload.torn_id})`
+      }
+    } catch (e) {
+      console.error('[Dashboard API] Failed to fetch operator name:', e)
+    }
+  }
+
   const stub = getFactionDO(c)
-  await stub.fetch(new URL('/internal/stop', c.req.url).toString())
+  const url = new URL('/internal/stop', c.req.url)
+  url.searchParams.set('operator', operator)
+  await stub.fetch(url.toString())
   return c.text('Tactical Engine Stopped!')
 })
 

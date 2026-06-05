@@ -53,23 +53,7 @@ api.post('/test/mock-login', async (c) => {
   return c.json({ success: true, token });
 })
 
-api.post('/test/concurrency', async (c) => {
-  const { count } = await c.req.json() as { count: number };
-  const batch: any[] = [];
-  for (let i = 0; i < count; i++) {
-    batch.push({
-      body: { tornId: `TEST_${i}`, apiKey: 'MOCK_KEY' }
-    });
-    if (batch.length === 10) {
-      await c.env.MEMBER_QUEUE.sendBatch(batch);
-      batch.length = 0;
-    }
-  }
-  if (batch.length > 0) {
-    await c.env.MEMBER_QUEUE.sendBatch(batch);
-  }
-  return c.json({ success: true, queued: count });
-})
+
 
 // Global Master Switch Middleware (Edge Interception)
 export const checkMasterSwitch = async (c: any, next: any) => {
@@ -103,19 +87,14 @@ api.get('/health', checkMasterSwitch, async (c) => {
     const db = drizzle(c.env.DB);
     const dbTest = await db.select().from(members).limit(1);
 
-    // 3. Test Queue binding
-    const queueExists = !!c.env.MEMBER_QUEUE;
-    if (queueExists && c.req.query('testQueue') === 'true') {
-      await c.env.MEMBER_QUEUE.send({ test: 'Ping from health check!', time: Date.now() });
-    }
+
 
     return c.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       tests: {
         kv: kvTest,
-        db: Array.isArray(dbTest) ? 'Passed ✅' : 'Failed ❌',
-        queue: queueExists ? 'Passed ✅' : 'Failed ❌'
+        db: Array.isArray(dbTest) ? 'Passed ✅' : 'Failed ❌'
       }
     })
   } catch (error: any) {

@@ -1,6 +1,9 @@
 import { Hono } from 'hono'
 import { verify } from 'hono/jwt'
 import { getCookie } from 'hono/cookie'
+import { drizzle } from 'drizzle-orm/d1'
+import { eq } from 'drizzle-orm'
+import { members } from '../db/schema'
 import type { Env } from './index'
 
 const admin = new Hono<Env>()
@@ -15,6 +18,7 @@ admin.use('*', async (c, next) => {
     if (payload.role !== 'admin') {
       return c.json({ error: 'Forbidden: Admin access required' }, 403)
     }
+    c.set('jwtPayload', payload)
     await next()
   } catch (e) {
     return c.json({ error: 'Invalid Session' }, 401)
@@ -29,6 +33,20 @@ admin.post('/toggle', async (c) => {
     return c.json({ error: 'Invalid state' }, 400)
   }
 
+  const payload = c.get('jwtPayload') as any
+  let operator = `Unknown (${payload?.torn_id})`
+  if (payload?.torn_id) {
+    try {
+      const db = drizzle(c.env.DB)
+      const member = await db.select().from(members).where(eq(members.torn_id, payload.torn_id)).limit(1)
+      if (member.length > 0) {
+        operator = `${member[0].name} (${payload.torn_id})`
+      }
+    } catch (e) {
+      console.error('[Admin API] Failed to fetch operator name:', e)
+    }
+  }
+
   // Use a singleton DO instance for the global switch
   const id = c.env.CHAIN_MONITOR.idFromName('GLOBAL_MONITOR')
   const obj = c.env.CHAIN_MONITOR.get(id)
@@ -36,7 +54,7 @@ admin.post('/toggle', async (c) => {
   // Pass command to DO (Transparent Proxy)
   const res = await obj.fetch(new Request(`${new URL(c.req.url).origin}/toggle`, {
     method: 'POST',
-    body: JSON.stringify({ state }),
+    body: JSON.stringify({ state, operator }),
     headers: { 'Content-Type': 'application/json' }
   }))
 

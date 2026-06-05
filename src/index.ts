@@ -10,7 +10,6 @@ export type Env = {
     TCT_CACHE: KVNamespace;
     TCT_KV: KVNamespace;
     DB: D1Database;
-    MEMBER_QUEUE: Queue;
     CHAIN_MONITOR: DurableObjectNamespace;
     JWT_SECRET: string;
     ENCRYPTION_SECRET: string;
@@ -22,7 +21,6 @@ export type Env = {
     ALERTS_WEBHOOK_URL: string;
     FFSCOUTER_API_KEY?: string;
     ANALYTICS?: AnalyticsEngineDataset;
-    BYPASS_QUEUE?: string;
   },
   Variables: {
     parsedBody: any;
@@ -75,14 +73,10 @@ app.get('*', async (c, next) => {
 export { ChainMonitor }
 
 import { producer } from './jobs/faction_poller'
-import { consumer } from './jobs/member_consumer'
 
 export default {
   fetch: app.fetch,
   async scheduled(event: any, env: Env['Bindings'], ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(producer(event, env));
-  },
-  async queue(batch: MessageBatch<any>, env: Env['Bindings'], ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(consumer(batch, env));
   }
 }

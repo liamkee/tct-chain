@@ -38,7 +38,6 @@ export class ChainMonitor implements DurableObject {
     excludeRefill: false
   };
   private chainTarget: number = 100;
-  private queueDisabledUntil: number = 0; // Timestamp until which queue is bypassed
   
   
 
@@ -158,11 +157,15 @@ export class ChainMonitor implements DurableObject {
     }
 
     if (url.pathname === '/toggle') {
-      const { state } = await request.json() as { state: 'ON' | 'OFF' };
+      const { state, operator } = await request.json() as { state: 'ON' | 'OFF', operator?: string };
+      const op = operator || 'System';
 
       await this.state.storage.put('master_switch', state);
       this.masterSwitch = state;
-      console.log(`[DO] Master Switch toggled to: ${state}`);
+      console.log(`[DO] Master Switch toggled to: ${state} by ${op}`);
+
+      this.microLogs.push({ ts: Date.now(), msg: `Engine ${state === 'ON' ? 'Started' : 'Stopped'} by ${op}` });
+      while (this.microLogs.length > 20) this.microLogs.shift();
 
       // 🚀 NEW: Sync state to KV for Queue Consumer and Edge Middleware (Resilient to KV write limits)
       if (this.env.TCT_KV) {
@@ -345,9 +348,12 @@ export class ChainMonitor implements DurableObject {
     }
 
     if (url.pathname === '/internal/stop') {
+      const operator = url.searchParams.get('operator') || 'System';
       await this.state.storage.put('master_switch', 'OFF');
       this.masterSwitch = 'OFF';
-      this.microLogs.push({ ts: Date.now(), msg: 'Engine Manual Stop: Polling suspended' });
+      this.microLogs.push({ ts: Date.now(), msg: `Engine Stopped by ${operator}` });
+      while (this.microLogs.length > 20) this.microLogs.shift();
+      
       this.broadcastToWebSockets({
         type: 'HEARTBEAT',
         master_switch: 'OFF',
@@ -358,13 +364,15 @@ export class ChainMonitor implements DurableObject {
     }
 
     if (url.pathname === '/internal/start') {
+      const operator = url.searchParams.get('operator') || 'System';
       const currentAlarm = await this.state.storage.getAlarm();
       if (currentAlarm === null) {
         await this.state.storage.setAlarm(Date.now() + 100);
       }
       await this.state.storage.put('master_switch', 'ON');
       this.masterSwitch = 'ON';
-      this.microLogs.push({ ts: Date.now(), msg: 'Engine Manual Start: Polling initiated' });
+      this.microLogs.push({ ts: Date.now(), msg: `Engine Started by ${operator}` });
+      while (this.microLogs.length > 20) this.microLogs.shift();
 
       // 🚀 Ensure we have the latest member list from DB before broadcasting
       await this.syncDbMembers();
@@ -708,26 +716,8 @@ export class ChainMonitor implements DurableObject {
         }
 
         if (batch.length > 0) {
-          const isQueueBypassed = this.env.BYPASS_QUEUE === 'true' || Date.now() < this.queueDisabledUntil;
-          if (isQueueBypassed) {
-            console.log(`[DO] Queue is temporarily or permanently bypassed. Running ${batch.length} polls directly.`);
-            await this.processDirectPolls(batch);
-          } else {
-            try {
-              // Send all member polls bundled into a single Queue message
-              await this.env.MEMBER_QUEUE.send({
-                factionId: this.factionId,
-                polls: batch.map(m => m.body)
-              });
-              console.log(`[DO] Bundled and sent ${batch.length} member polls in a single Queue message.`);
-            } catch (queueErr: any) {
-              console.warn(`[DO] Queue send failed (likely daily limit exceeded), running polls directly: ${queueErr.message}`);
-              this.queueDisabledUntil = Date.now() + 3600000; // Bypass queue for 1 hour on failure
-              this.microLogs.push({ ts: Date.now(), msg: '⚠️ Cloudflare Queues limit exceeded. Running polls directly.' });
-              if (this.microLogs.length > 20) this.microLogs.shift();
-              await this.processDirectPolls(batch);
-            }
-          }
+          console.log(`[DO] Running ${batch.length} polls directly.`);
+          await this.processDirectPolls(batch);
         }
 
         // 7. Persistence
